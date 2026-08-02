@@ -1,0 +1,8 @@
+{
+  "product": "JM-AI Action Hub Native iOS",
+  "version": "0.2.1",
+  "commit": "534ad6504355330ca8dcc098d0384019c9652bce",
+  "required_server": "0.9.0",
+  "openapi_sha256": "b5ae0361a4b4b1cf22f29ff4742d927f6fa839e2faebca7a1a805842eaa10fbc",
+  "release_date": "2026-08-01"
+}

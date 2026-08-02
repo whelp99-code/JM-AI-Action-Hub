@@ -1,0 +1,102 @@
+{
+  "release": {
+    "server": "0.9.0",
+    "ios": "0.2.1",
+    "date": "2026-08-01"
+  },
+  "commits": {
+    "server": "69305e23373c3a7a0e58be1a05ac1bbdaf2bfde0",
+    "ios": "534ad6504355330ca8dcc098d0384019c9652bce"
+  },
+  "tests": {
+    "server_pytest": 86,
+    "warnings_as_errors": true,
+    "swift_xctest": 36,
+    "swift_testing_smoke": 1
+  },
+  "coverage": {
+    "files": 60,
+    "statements": 6301,
+    "missing": 1089,
+    "excluded": 43,
+    "coverage_percent": 82.717,
+    "gate_percent": 80.0,
+    "gate_passed": true
+  },
+  "openapi": {
+    "version": "0.9.0",
+    "paths": 77,
+    "operations": 80,
+    "unique_operation_ids": true,
+    "sha256": "b5ae0361a4b4b1cf22f29ff4742d927f6fa839e2faebca7a1a805842eaa10fbc"
+  },
+  "http_e2e": {
+    "activity": 17,
+    "capture_status": "processed",
+    "changes": 17,
+    "classified_quadrant": "q1",
+    "device_id": "b2c89dc2-f146-4a9b-a8ce-58d9b5bdc23b",
+    "execution_completed": 2,
+    "execution_failed": 0,
+    "focus_report_sessions": 1,
+    "focus_state": "completed",
+    "human_big3": 1,
+    "matrix_q1": 0,
+    "microsteps": 4,
+    "plan_id": "fb6d7f51-6c2f-45fd-96e5-909570703839",
+    "push_processed": 1,
+    "push_state": "simulated",
+    "review_after": 0,
+    "review_before": 0,
+    "revoked_access_status": 401,
+    "revoked_refresh_status": 401,
+    "server_version": "0.9.0",
+    "stale_revision_status": 409,
+    "status": "ok"
+  },
+  "swift_e2e": {
+    "activity_count": 10,
+    "capture_status": "processed",
+    "change_count": 33,
+    "device_id": "60162f22-28d5-4b3e-98f4-9ca2a996ae7d",
+    "execution_completed": 1,
+    "execution_failed": 0,
+    "focus_microsteps": 5,
+    "focus_report_sessions": 2,
+    "focus_state": "completed",
+    "human_big3": 1,
+    "matrix_q1": 0,
+    "plan_id": "86519ca1-945b-40e6-a194-3274c3d58eb0",
+    "review_count_after": 0,
+    "review_count_before": 0,
+    "server_version": "0.9.0"
+  },
+  "migration": {
+    "alembic_revision": "0005_decision_focus_foundation",
+    "plan_preserved": true,
+    "item_ids_preserved": true,
+    "titles_preserved": true,
+    "attention_defaults": [
+      "untriaged",
+      "untriaged"
+    ],
+    "focus_tables": [
+      "carry_over_decisions",
+      "daily_commitments",
+      "daily_focus_plans",
+      "focus_sessions",
+      "micro_steps",
+      "priority_assessments"
+    ],
+    "api_plan_status": 200,
+    "triage_total": 2
+  },
+  "apple_acceptance_boundary": [
+    "Xcode iOS SDK target build",
+    "code signing/archive/IPA",
+    "physical-device Live Activity",
+    "APNs live delivery",
+    "TestFlight upload/install"
+  ],
+  "ruff_local": "not run: ruff executable unavailable in this environment"
+}

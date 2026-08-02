@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#14213d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>JM-AI Action Hub</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icon-192.png">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="app-header">
+    <div>
+      <p class="eyebrow">JM-AI</p>
+      <h1>Action Hub</h1>
+    </div>
+    <div class="status-wrap">
+      <span id="serviceStatus" class="status-dot" title="서비스 상태"></span>
+      <button id="installButton" class="ghost small" hidden>홈 화면 설치</button>
+    </div>
+  </header>
+
+  <main>
+    <nav class="tabs" aria-label="주요 화면">
+      <button class="tab active" data-view="capture">빠른 등록</button>
+      <button class="tab" data-view="today">오늘</button>
+      <button class="tab" data-view="recent">최근</button>
+      <button class="tab" data-view="settings">설정</button>
+    </nav>
+
+    <section id="captureView" class="view active">
+      <div class="hero-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">AI INBOX</p>
+            <h2>말하거나 붙여넣으세요</h2>
+          </div>
+          <span id="executionBadge" class="badge">확인 중</span>
+        </div>
+        <textarea id="inputText" maxlength="30000" rows="8" placeholder="예: 내일 오전 10시 선진 HCI 미팅. 오늘 6시까지 견적서 초안 작성. repo:whelp99-code/Proof-Graph 로그인 버그 수정."></textarea>
+        <div class="input-actions">
+          <button id="pasteButton" class="ghost">붙여넣기</button>
+          <button id="voiceButton" class="ghost">음성 입력</button>
+          <button id="clearButton" class="ghost">지우기</button>
+        </div>
+        <div class="primary-row">
+          <select id="sourceSelect" aria-label="입력 출처">
+            <option value="paste">복사·붙여넣기</option>
+            <option value="voice">음성</option>
+            <option value="share">공유 시트</option>
+            <option value="email">이메일</option>
+            <option value="manual">직접 입력</option>
+          </select>
+          <button id="parseButton" class="primary">실행 항목 만들기</button>
+        </div>
+        <p class="helper">외부 앱에는 승인 전까지 아무것도 등록하지 않습니다.</p>
+      </div>
+
+      <div id="planArea" class="plan-area" hidden>
+        <div class="section-heading sticky-heading">
+          <div>
+            <p class="eyebrow">REVIEW</p>
+            <h2 id="planSummary">생성 예정 항목</h2>
+          </div>
+          <span id="planStatus" class="badge"></span>
+        </div>
+        <div id="itemsContainer" class="items"></div>
+        <div class="approval-bar">
+          <label class="force-review"><input id="forceReview" type="checkbox"> 검토 필요 항목도 강제 승인</label>
+          <div class="approval-buttons">
+            <button id="rejectButton" class="danger ghost">선택 제외</button>
+            <button id="approveButton" class="secondary">선택 승인</button>
+            <button id="executeButton" class="primary">승인 항목 실행</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="todayView" class="view">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">DAILY BRIEF</p>
+          <h2>오늘의 실행 계획</h2>
+        </div>
+        <button id="refreshBrief" class="ghost small">새로고침</button>
+      </div>
+      <div class="decision-toolbar">
+        <label>오늘 가용시간(분)
+          <input id="availableMinutes" type="number" min="30" max="1440" step="30" value="480">
+        </label>
+        <button id="buildDecision" class="primary">우선순위 계산</button>
+      </div>
+      <div id="decisionPanel" class="decision-panel" hidden>
+        <div id="decisionNumbers" class="metric-grid"></div>
+        <p id="decisionSummary" class="summary-line"></p>
+        <div id="decisionRisks"></div>
+        <div id="decisionTop"></div>
+        <div id="decisionAi"></div>
+      </div>
+      <p id="briefSummary" class="summary-line">불러오는 중</p>
+      <div id="briefSections"></div>
+      <div class="section-heading compact-heading">
+        <div><p class="eyebrow">FOLLOW-UP</p><h2>응답 대기 확인</h2></div>
+        <button id="refreshFollowups" class="ghost small">새로고침</button>
+      </div>
+      <div id="dueFollowups"></div>
+    </section>
+
+    <section id="recentView" class="view">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">HISTORY</p>
+          <h2>최근 입력</h2>
+        </div>
+        <button id="refreshRecent" class="ghost small">새로고침</button>
+      </div>
+      <div id="recentPlans" class="recent-list"></div>
+    </section>
+
+    <section id="settingsView" class="view">
+      <div class="settings-card">
+        <p class="eyebrow">LOCAL SETTINGS</p>
+        <h2>연결 설정</h2>
+        <label>Action Hub API 키
+          <input id="apiKeyInput" type="password" autocomplete="off" placeholder="서버에 설정한 키">
+        </label>
+        <label>기본 시간대
+          <input value="Asia/Seoul" disabled>
+        </label>
+        <button id="saveSettings" class="primary">이 기기에 저장</button>
+        <p class="helper">API 키는 이 브라우저의 로컬 저장소에만 보관됩니다.</p>
+      </div>
+      <div class="settings-card">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">CONNECTORS</p>
+            <h2>외부 서비스 상태</h2>
+          </div>
+        </div>
+        <div id="connectorStatuses"></div>
+      </div>
+      <div class="settings-card">
+        <div class="section-heading">
+          <div><p class="eyebrow">AI WORKERS</p><h2>기존 실행 에이전트</h2></div>
+          <button id="runControlLoop" class="ghost small">대기열 1회 처리</button>
+        </div>
+        <div id="workerStatuses"></div>
+        <p class="helper">Codex·Claude·Copilot·Orca·Hermes 자체 기능은 재개발하지 않고, 설정된 GitHub Workflow만 호출합니다.</p>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

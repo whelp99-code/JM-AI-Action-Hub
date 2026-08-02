@@ -1,0 +1,22 @@
+[Unit]
+Description=JM-AI Action Hub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=actionhub
+Group=actionhub
+WorkingDirectory=/opt/jm-ai-action-hub
+EnvironmentFile=/opt/jm-ai-action-hub/.env
+Environment=ACTION_HUB_WORKER_INLINE=false
+ExecStart=/opt/jm-ai-action-hub/.venv/bin/uvicorn action_hub.main:app --host 127.0.0.1 --port 8787
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/jm-ai-action-hub/data
+
+[Install]
+WantedBy=multi-user.target

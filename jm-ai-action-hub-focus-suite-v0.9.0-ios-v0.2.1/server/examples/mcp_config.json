@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "jm-ai-action-hub": {
+      "command": "action-hub-mcp",
+      "env": {
+        "ACTION_HUB_MCP_BASE_URL": "http://127.0.0.1:8787",
+        "ACTION_HUB_API_KEY": "REPLACE_WITH_ACTION_HUB_KEY"
+      }
+    }
+  }
+}

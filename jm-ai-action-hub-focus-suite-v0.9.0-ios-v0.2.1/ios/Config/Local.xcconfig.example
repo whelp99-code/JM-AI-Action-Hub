@@ -1,0 +1,4 @@
+// Copy to Config/Local.xcconfig. This file is git-ignored.
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+ACTION_HUB_BUNDLE_PREFIX = com.yourcompany.jmactionhub
+ACTION_HUB_APP_GROUP = group.com.yourcompany.jmactionhub.shared

@@ -1,0 +1,119 @@
+XCODEPROJ_CHECK_OK
+{"operations": 80, "sha256": "b5ae0361a4b4b1cf22f29ff4742d927f6fa839e2faebca7a1a805842eaa10fbc", "status": "ok", "version": "0.9.0"}
+IOS_PROJECT_STATIC_OK sources=30
+Test Suite 'All tests' started at 2026-07-31 16:05:36.712
+Test Suite 'debug.xctest' started at 2026-07-31 16:05:36.713
+Test Suite 'APIClientTests' started at 2026-07-31 16:05:36.713
+Test Case 'APIClientTests.testAllowsHTTPOnlyForLoopbackDevelopment' started at 2026-07-31 16:05:36.713
+Test Case 'APIClientTests.testAllowsHTTPOnlyForLoopbackDevelopment' passed (0.003 seconds)
+Test Case 'APIClientTests.testConflictResponseMapsCurrentRevision' started at 2026-07-31 16:05:36.716
+Test Case 'APIClientTests.testConflictResponseMapsCurrentRevision' passed (0.001 seconds)
+Test Case 'APIClientTests.testDashboardUsesBearerToken' started at 2026-07-31 16:05:36.716
+Test Case 'APIClientTests.testDashboardUsesBearerToken' passed (0.003 seconds)
+Test Case 'APIClientTests.testDynamicIdentifiersAreEncodedAsSinglePathSegments' started at 2026-07-31 16:05:36.720
+Test Case 'APIClientTests.testDynamicIdentifiersAreEncodedAsSinglePathSegments' passed (0.0 seconds)
+Test Case 'APIClientTests.testRejectsInsecureRemoteHTTPServer' started at 2026-07-31 16:05:36.720
+Test Case 'APIClientTests.testRejectsInsecureRemoteHTTPServer' passed (0.0 seconds)
+Test Suite 'APIClientTests' passed at 2026-07-31 16:05:36.720
+	 Executed 5 tests, with 0 failures (0 unexpected) in 0.007 (0.007) seconds
+Test Suite 'FocusAPIClientTests' started at 2026-07-31 16:05:36.720
+Test Case 'FocusAPIClientTests.testClassifyEncodesIdentifierAsOnePathSegment' started at 2026-07-31 16:05:36.720
+Test Case 'FocusAPIClientTests.testClassifyEncodesIdentifierAsOnePathSegment' passed (0.001 seconds)
+Test Case 'FocusAPIClientTests.testStartFocusAcceptsCreatedAndUsesBearerToken' started at 2026-07-31 16:05:36.722
+Test Case 'FocusAPIClientTests.testStartFocusAcceptsCreatedAndUsesBearerToken' passed (0.002 seconds)
+Test Suite 'FocusAPIClientTests' passed at 2026-07-31 16:05:36.724
+	 Executed 2 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'FocusModelCodingTests' started at 2026-07-31 16:05:36.724
+Test Case 'FocusModelCodingTests.testFocusRequestsEncodeSnakeCaseFields' started at 2026-07-31 16:05:36.724
+Test Case 'FocusModelCodingTests.testFocusRequestsEncodeSnakeCaseFields' passed (0.001 seconds)
+Test Case 'FocusModelCodingTests.testFocusSessionAndMicrostepsDecode' started at 2026-07-31 16:05:36.725
+Test Case 'FocusModelCodingTests.testFocusSessionAndMicrostepsDecode' passed (0.002 seconds)
+Test Case 'FocusModelCodingTests.testTriageAndAssessmentDecodeFromServerContract' started at 2026-07-31 16:05:36.726
+Test Case 'FocusModelCodingTests.testTriageAndAssessmentDecodeFromServerContract' passed (0.001 seconds)
+Test Case 'FocusModelCodingTests.testWidgetSnapshotRemainsBackwardCompatibleWithVersionOneCache' started at 2026-07-31 16:05:36.728
+Test Case 'FocusModelCodingTests.testWidgetSnapshotRemainsBackwardCompatibleWithVersionOneCache' passed (0.001 seconds)
+Test Suite 'FocusModelCodingTests' passed at 2026-07-31 16:05:36.728
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.004 (0.004) seconds
+Test Suite 'MobileSessionTests' started at 2026-07-31 16:05:36.728
+Test Case 'MobileSessionTests.testDisconnectAlwaysDeletesLocalCredentialsWhenServerRevokeFails' started at 2026-07-31 16:05:36.728
+Test Case 'MobileSessionTests.testDisconnectAlwaysDeletesLocalCredentialsWhenServerRevokeFails' passed (0.101 seconds)
+Test Case 'MobileSessionTests.testPairingPreflightsCapabilitiesBeforeClaim' started at 2026-07-31 16:05:36.830
+Test Case 'MobileSessionTests.testPairingPreflightsCapabilitiesBeforeClaim' passed (0.002 seconds)
+Test Case 'MobileSessionTests.testPairingRejectsAppBelowServerMinimumWithoutClaiming' started at 2026-07-31 16:05:36.832
+Test Case 'MobileSessionTests.testPairingRejectsAppBelowServerMinimumWithoutClaiming' passed (0.0 seconds)
+Test Case 'MobileSessionTests.testUnauthorizedRequestRefreshesAndRetries' started at 2026-07-31 16:05:36.832
+Test Case 'MobileSessionTests.testUnauthorizedRequestRefreshesAndRetries' passed (0.003 seconds)
+Test Suite 'MobileSessionTests' passed at 2026-07-31 16:05:36.835
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.107 (0.107) seconds
+Test Suite 'ModelCodingTests' started at 2026-07-31 16:05:36.835
+Test Case 'ModelCodingTests.testActionItemPatchDistinguishesOmittedValueAndExplicitNull' started at 2026-07-31 16:05:36.835
+Test Case 'ModelCodingTests.testActionItemPatchDistinguishesOmittedValueAndExplicitNull' passed (0.0 seconds)
+Test Case 'ModelCodingTests.testCapabilitiesDecodesSnakeCaseAcronyms' started at 2026-07-31 16:05:36.836
+Test Case 'ModelCodingTests.testCapabilitiesDecodesSnakeCaseAcronyms' passed (0.0 seconds)
+Test Case 'ModelCodingTests.testCaptureEncodesIdempotencyIdentifier' started at 2026-07-31 16:05:36.836
+Test Case 'ModelCodingTests.testCaptureEncodesIdempotencyIdentifier' passed (0.001 seconds)
+Test Case 'ModelCodingTests.testDateDecoderAcceptsFractionalAndWholeSeconds' started at 2026-07-31 16:05:36.837
+Test Case 'ModelCodingTests.testDateDecoderAcceptsFractionalAndWholeSeconds' passed (0.001 seconds)
+Test Suite 'ModelCodingTests' passed at 2026-07-31 16:05:36.838
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.002 (0.002) seconds
+Test Suite 'OfflineCaptureQueueTests' started at 2026-07-31 16:05:36.838
+Test Case 'OfflineCaptureQueueTests.testIndependentQueueInstancesDoNotLoseConcurrentCaptures' started at 2026-07-31 16:05:36.838
+Test Case 'OfflineCaptureQueueTests.testIndependentQueueInstancesDoNotLoseConcurrentCaptures' passed (0.003 seconds)
+Test Case 'OfflineCaptureQueueTests.testLegacyArrayQueueIsMigratedWithoutDataLoss' started at 2026-07-31 16:05:36.841
+Test Case 'OfflineCaptureQueueTests.testLegacyArrayQueueIsMigratedWithoutDataLoss' passed (0.007 seconds)
+Test Case 'OfflineCaptureQueueTests.testQueuePersistsAndRemovesReceipts' started at 2026-07-31 16:05:36.848
+Test Case 'OfflineCaptureQueueTests.testQueuePersistsAndRemovesReceipts' passed (0.002 seconds)
+Test Case 'OfflineCaptureQueueTests.testRejectsEmptyCapture' started at 2026-07-31 16:05:36.850
+Test Case 'OfflineCaptureQueueTests.testRejectsEmptyCapture' passed (0.0 seconds)
+Test Suite 'OfflineCaptureQueueTests' passed at 2026-07-31 16:05:36.850
+	 Executed 4 tests, with 0 failures (0 unexpected) in 0.012 (0.012) seconds
+Test Suite 'PairingPayloadTests' started at 2026-07-31 16:05:36.850
+Test Case 'PairingPayloadTests.testAllowsHTTPOnlyForLoopbackDevelopment' started at 2026-07-31 16:05:36.850
+Test Case 'PairingPayloadTests.testAllowsHTTPOnlyForLoopbackDevelopment' passed (0.0 seconds)
+Test Case 'PairingPayloadTests.testParsesJSONPayload' started at 2026-07-31 16:05:36.850
+Test Case 'PairingPayloadTests.testParsesJSONPayload' passed (0.0 seconds)
+Test Case 'PairingPayloadTests.testParsesLegacySchemeOnlyForPastedCompatibility' started at 2026-07-31 16:05:36.850
+Test Case 'PairingPayloadTests.testParsesLegacySchemeOnlyForPastedCompatibility' passed (0.101 seconds)
+Test Case 'PairingPayloadTests.testParsesPreferredCustomSchemePayload' started at 2026-07-31 16:05:36.951
+Test Case 'PairingPayloadTests.testParsesPreferredCustomSchemePayload' passed (0.0 seconds)
+Test Case 'PairingPayloadTests.testRejectsDuplicateQueryParameterWithoutCrashing' started at 2026-07-31 16:05:36.951
+Test Case 'PairingPayloadTests.testRejectsDuplicateQueryParameterWithoutCrashing' passed (0.0 seconds)
+Test Case 'PairingPayloadTests.testRejectsInsecureRemoteServer' started at 2026-07-31 16:05:36.952
+Test Case 'PairingPayloadTests.testRejectsInsecureRemoteServer' passed (0.0 seconds)
+Test Case 'PairingPayloadTests.testRejectsMalformedCode' started at 2026-07-31 16:05:36.952
+Test Case 'PairingPayloadTests.testRejectsMalformedCode' passed (0.0 seconds)
+Test Case 'PairingPayloadTests.testRejectsUnexpectedQueryParameter' started at 2026-07-31 16:05:36.952
+Test Case 'PairingPayloadTests.testRejectsUnexpectedQueryParameter' passed (0.0 seconds)
+Test Case 'PairingPayloadTests.testRejectsWrongCustomURLHost' started at 2026-07-31 16:05:36.952
+Test Case 'PairingPayloadTests.testRejectsWrongCustomURLHost' passed (0.0 seconds)
+Test Case 'PairingPayloadTests.testRejectsWrongJSONTypeAndVersion' started at 2026-07-31 16:05:36.952
+Test Case 'PairingPayloadTests.testRejectsWrongJSONTypeAndVersion' passed (0.0 seconds)
+Test Suite 'PairingPayloadTests' passed at 2026-07-31 16:05:36.952
+	 Executed 10 tests, with 0 failures (0 unexpected) in 0.102 (0.102) seconds
+Test Suite 'SemanticVersionTests' started at 2026-07-31 16:05:36.952
+Test Case 'SemanticVersionTests.testMalformedVersionFailsClosed' started at 2026-07-31 16:05:36.952
+Test Case 'SemanticVersionTests.testMalformedVersionFailsClosed' passed (0.0 seconds)
+Test Case 'SemanticVersionTests.testPrereleaseSuffixUsesCoreVersionForMinimumCheck' started at 2026-07-31 16:05:36.952
+Test Case 'SemanticVersionTests.testPrereleaseSuffixUsesCoreVersionForMinimumCheck' passed (0.0 seconds)
+Test Case 'SemanticVersionTests.testVersionComparisonPadsMissingComponents' started at 2026-07-31 16:05:36.952
+Test Case 'SemanticVersionTests.testVersionComparisonPadsMissingComponents' passed (0.0 seconds)
+Test Suite 'SemanticVersionTests' passed at 2026-07-31 16:05:36.953
+	 Executed 3 tests, with 0 failures (0 unexpected) in 0.0 (0.0) seconds
+Test Suite 'debug.xctest' passed at 2026-07-31 16:05:36.953
+	 Executed 36 tests, with 0 failures (0 unexpected) in 0.239 (0.239) seconds
+Test Suite 'All tests' passed at 2026-07-31 16:05:36.953
+	 Executed 36 tests, with 0 failures (0 unexpected) in 0.239 (0.239) seconds
+◇ Test run started.
+↳ Testing Library Version: 6.2.1 (c9d57c83568b06d)
+↳ Target Platform: x86_64-unknown-linux-gnu
+◇ Test packageSmoke() started.
+✔ Test packageSmoke() passed after 0.001 seconds.
+✔ Test run with 1 test in 0 suites passed after 0.001 seconds.
+Config/ActionHubApp-Info.plist: OK
+Config/ActionHubShareExtension.entitlements: OK
+Config/ActionHubApp.entitlements: OK
+Config/WidgetExtension-Info.plist: OK
+Config/ShareExtension-Info.plist: OK
+Config/ActionHubWidgetExtension.entitlements: OK
+ActionHubApp/Resources/PrivacyInfo.xcprivacy: OK
+IOS_RELEASE_SOURCE_CHECK_OK

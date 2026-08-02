@@ -1,0 +1,38 @@
+services:
+  action-hub:
+    build: .
+    container_name: jm-ai-action-hub
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ACTION_HUB_WORKER_INLINE: "false"
+    ports:
+      - "8787:8787"
+    volumes:
+      - action_hub_data:/app/data
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  action-hub-worker:
+    build: .
+    container_name: jm-ai-action-hub-worker
+    restart: unless-stopped
+    command: ["action-hub-worker"]
+    env_file: .env
+    environment:
+      ACTION_HUB_WORKER_INLINE: "false"
+      ACTION_HUB_RUN_MIGRATIONS: "false"
+    volumes:
+      - action_hub_data:/app/data
+    depends_on:
+      action-hub:
+        condition: service_healthy
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+volumes:
+  action_hub_data:

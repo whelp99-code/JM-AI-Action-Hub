@@ -1,0 +1,973 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0E2317EE7FC1BE710CEE94D0 = {
+			isa = PBXBuildFile;
+			fileRef = E71C90507EE7525A9470A6D9 /* ActionHubShareExtension.appex */;
+			settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); };
+		};
+		1BB67D51211D7434198F7288 = {
+			isa = PBXBuildFile;
+			fileRef = 5BE4447B6FDC24B384A39DA0 /* ActionHubApp.swift */;
+		};
+		29A9CC0D4CDE43EA95987E37 = {
+			isa = PBXBuildFile;
+			fileRef = 228E0A6451A5EB74C651B2D0 /* ActionItemEditor.swift */;
+		};
+		3A44997912DAC789A424B90A = {
+			isa = PBXBuildFile;
+			fileRef = B1AE742CD2758C918FBE98B8 /* AppGroupStore.swift */;
+		};
+		3FDD9940231E2F14A3AE2D3F = {
+			isa = PBXBuildFile;
+			fileRef = 2E4727EDB02E0D302F786E4E /* FocusLiveActivityManager.swift */;
+		};
+		4715B4E2F6FF15AC1EFB9740 = {
+			isa = PBXBuildFile;
+			fileRef = 265A5E76BC9A37CF6B500C78 /* ActivityView.swift */;
+		};
+		4A4E97ECD9A3EEFFADC4E9AC = {
+			isa = PBXBuildFile;
+			fileRef = D413E90240E67D4A2C6F8041 /* MatrixFocusView.swift */;
+		};
+		50898E5E2D73503CF7AC2BF1 = {
+			isa = PBXBuildFile;
+			fileRef = F6F01C81A58E5B1F1093BC7B /* FocusHomeView.swift */;
+		};
+		5457AB9FB521F7F7EF0268A3 = {
+			isa = PBXBuildFile;
+			fileRef = 4C47665D1BA4105DF9684DC4 /* ActionHubWidgetExtension.appex */;
+			settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); };
+		};
+		59542DAD63F6EE4EFF93F09D = {
+			isa = PBXBuildFile;
+			fileRef = 5F82C3FD37706013125CE72C /* BackgroundSyncManager.swift */;
+		};
+		5E93C58BF757A248E33FB27F = {
+			isa = PBXBuildFile;
+			fileRef = DF74A5AC8A25C338C2A2DFBE /* ShareViewController.swift */;
+		};
+		6F785D506E8C4538B54633F9 = {
+			isa = PBXBuildFile;
+			fileRef = BA280059C87EB65AE6C9144F /* CaptureView.swift */;
+		};
+		754E6E57957000C162A2BE64 = {
+			isa = PBXBuildFile;
+			fileRef = 42D57157909BF4223DB2601E /* KeychainCredentialStore.swift */;
+		};
+		815E53775CB1AAB2E5F33926 = {
+			isa = PBXBuildFile;
+			fileRef = A7866D51EE741B4D32C48725 /* AppModel.swift */;
+		};
+		890D00F4FB45EE193B107CB1 = {
+			isa = PBXBuildFile;
+			productRef = 1590E354A479ABDDA7461C13 /* ActionHubCore */;
+		};
+		95C489FC10498CB7FC0FDD8E = {
+			isa = PBXBuildFile;
+			fileRef = 27DBD131D7B48B94D05789B8 /* PairingView.swift */;
+		};
+		9C902A2944878801737B0DBC = {
+			isa = PBXBuildFile;
+			fileRef = A16589B744EC4CA610D8A9F3 /* SettingsView.swift */;
+		};
+		9FB63BC0C5F51564705ADA46 = {
+			isa = PBXBuildFile;
+			fileRef = 5552F3079689B66AAA9CEF34 /* DayCloseView.swift */;
+		};
+		A314FF3827CCE0D02E046366 = {
+			isa = PBXBuildFile;
+			fileRef = C22F502B612DC8E026F74FCE /* BiometricLock.swift */;
+		};
+		AEA898B39BF9D7A0058655D0 = {
+			isa = PBXBuildFile;
+			productRef = 7780FA18CFED217DCB5CFAD8 /* ActionHubCore */;
+		};
+		B397C018A17BFBF166508EA2 = {
+			isa = PBXBuildFile;
+			fileRef = 92DD50CC5F3F864B34399DDD /* PrivacyInfo.xcprivacy */;
+		};
+		B3E66F8FBC5391C621549EFA = {
+			isa = PBXBuildFile;
+			fileRef = EC27582686B5B338565C2E5E /* AppConfiguration.swift */;
+		};
+		BBDAE806E8A79C76D4A29C7F = {
+			isa = PBXBuildFile;
+			fileRef = D95E144E488D5EF5035FE87E /* ActionHubWidget.swift */;
+		};
+		BE804A3A7295421E9B6DE344 = {
+			isa = PBXBuildFile;
+			fileRef = 7407628973E2CF9B0C53CDF4 /* DualBig3View.swift */;
+		};
+		C2BED6544D10C9A50E4BCC02 = {
+			isa = PBXBuildFile;
+			fileRef = B154E6245AF9551D65EEA858 /* FocusSessionView.swift */;
+		};
+		C80E12EE3FF45EB928F52CD4 = {
+			isa = PBXBuildFile;
+			fileRef = E582AC3A8B6AEE3C6309D5AD /* PlanDetailView.swift */;
+		};
+		C8F42D32F1652F6ED0793F99 = {
+			isa = PBXBuildFile;
+			productRef = BF43301C8C1AD736E4674253 /* ActionHubCore */;
+		};
+		CAF6B3C6EF1EC05260B21E05 = {
+			isa = PBXBuildFile;
+			fileRef = A87ECFA003E7C53B74D564FF /* QRScannerView.swift */;
+		};
+		CC6C5B45965EE1082E7ACB7E = {
+			isa = PBXBuildFile;
+			fileRef = 2E0A43A558AAFE7FEBB5AB0D /* AppDelegate.swift */;
+		};
+		D1E79CAB4119178E520A55D6 = {
+			isa = PBXBuildFile;
+			fileRef = 0990C4E3DFEBF3CC4B454ECE /* ActionHubAppIntents.swift */;
+		};
+		D2A8E1192DA24FEA68DEED48 = {
+			isa = PBXBuildFile;
+			fileRef = AF56361B6C242EFA62A4B231 /* TodayView.swift */;
+		};
+		D658EEC011A106FC3EDF59A4 = {
+			isa = PBXBuildFile;
+			fileRef = AA9181503E942801FD945D38 /* RootView.swift */;
+		};
+		E71EC0D1DA41F3066545E8FB = {
+			isa = PBXBuildFile;
+			fileRef = A8B5504027501ECD5972D811 /* TriageView.swift */;
+		};
+		EA5902AE1922499CDDDF442A = {
+			isa = PBXBuildFile;
+			fileRef = C2F8842D76C5916E7EB24698 /* ReviewView.swift */;
+		};
+		EE373BCF3AAA3D0332470409 = {
+			isa = PBXBuildFile;
+			fileRef = C909F0499BDFD86F78D7EC05 /* NotificationManager.swift */;
+		};
+		F86772ADE8B364D34A69E7E4 = {
+			isa = PBXBuildFile;
+			fileRef = 85195A9E613C7DDDED9A257A /* SpeechCaptureService.swift */;
+		};
+		FB90684E69A6C96ED866993E = {
+			isa = PBXBuildFile;
+			fileRef = D713469F5B32ED43EDD0BC4A /* Assets.xcassets */;
+		};
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0DD22CB6C2E8E29B0AF6C12D = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A5A0AA9F4FB5BC8D9254438A;
+			remoteInfo = ActionHubWidgetExtension;
+		};
+		991158F1E81F0D6E3C5D00A0 = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 1A6609CC8685B17F5F513A3B;
+			remoteInfo = ActionHubShareExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		2F933BA841895383DA49EE9D = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				0E2317EE7FC1BE710CEE94D0 /* ActionHubShareExtension.appex in Embed App Extensions */,
+				5457AB9FB521F7F7EF0268A3 /* ActionHubWidgetExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0990C4E3DFEBF3CC4B454ECE = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "ActionHubAppIntents.swift";
+			path = "ActionHubApp/Infrastructure/ActionHubAppIntents.swift";
+			sourceTree = "<group>";
+		};
+		0CF88675E3582D98566E1F60 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			path = WidgetExtension-Info.plist;
+			sourceTree = "<group>";
+		};
+		228E0A6451A5EB74C651B2D0 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "ActionItemEditor.swift";
+			path = "ActionHubApp/Features/Review/ActionItemEditor.swift";
+			sourceTree = "<group>";
+		};
+		265A5E76BC9A37CF6B500C78 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "ActivityView.swift";
+			path = "ActionHubApp/Features/Activity/ActivityView.swift";
+			sourceTree = "<group>";
+		};
+		27DBD131D7B48B94D05789B8 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "PairingView.swift";
+			path = "ActionHubApp/Features/Pairing/PairingView.swift";
+			sourceTree = "<group>";
+		};
+		2E0A43A558AAFE7FEBB5AB0D = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "AppDelegate.swift";
+			path = "ActionHubApp/App/AppDelegate.swift";
+			sourceTree = "<group>";
+		};
+		2E4727EDB02E0D302F786E4E = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "FocusLiveActivityManager.swift";
+			path = "ActionHubApp/Infrastructure/FocusLiveActivityManager.swift";
+			sourceTree = "<group>";
+		};
+		42D57157909BF4223DB2601E = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "KeychainCredentialStore.swift";
+			path = "ActionHubApp/Infrastructure/KeychainCredentialStore.swift";
+			sourceTree = "<group>";
+		};
+		4C47665D1BA4105DF9684DC4 = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.app-extension;
+			includeInIndex = 0;
+			path = ActionHubWidgetExtension.appex;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		5552F3079689B66AAA9CEF34 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "DayCloseView.swift";
+			path = "ActionHubApp/Features/Focus/DayCloseView.swift";
+			sourceTree = "<group>";
+		};
+		56CCD298F0CC02E86170C53F = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.xcconfig;
+			path = Debug.xcconfig;
+			sourceTree = "<group>";
+		};
+		5BE4447B6FDC24B384A39DA0 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "ActionHubApp.swift";
+			path = "ActionHubApp/App/ActionHubApp.swift";
+			sourceTree = "<group>";
+		};
+		5F82C3FD37706013125CE72C = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "BackgroundSyncManager.swift";
+			path = "ActionHubApp/Infrastructure/BackgroundSyncManager.swift";
+			sourceTree = "<group>";
+		};
+		70BC018ACCE042997D29B1D5 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			path = ActionHubApp-Info.plist;
+			sourceTree = "<group>";
+		};
+		7407628973E2CF9B0C53CDF4 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "DualBig3View.swift";
+			path = "ActionHubApp/Features/Focus/DualBig3View.swift";
+			sourceTree = "<group>";
+		};
+		789451737A6E2D6058D3B182 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.xcconfig;
+			path = Shared.xcconfig;
+			sourceTree = "<group>";
+		};
+		85195A9E613C7DDDED9A257A = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "SpeechCaptureService.swift";
+			path = "ActionHubApp/Infrastructure/SpeechCaptureService.swift";
+			sourceTree = "<group>";
+		};
+		86A61BF7C7DE0F05DD3CD1C3 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.entitlements;
+			path = ActionHubApp.entitlements;
+			sourceTree = "<group>";
+		};
+		8EAEDD9B3317650CED59D4BD = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			path = ShareExtension-Info.plist;
+			sourceTree = "<group>";
+		};
+		92DD50CC5F3F864B34399DDD = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.xml;
+			name = PrivacyInfo.xcprivacy;
+			path = ActionHubApp/Resources/PrivacyInfo.xcprivacy;
+			sourceTree = "<group>";
+		};
+		A16589B744EC4CA610D8A9F3 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "SettingsView.swift";
+			path = "ActionHubApp/Features/Settings/SettingsView.swift";
+			sourceTree = "<group>";
+		};
+		A7866D51EE741B4D32C48725 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "AppModel.swift";
+			path = "ActionHubApp/App/AppModel.swift";
+			sourceTree = "<group>";
+		};
+		A87ECFA003E7C53B74D564FF = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "QRScannerView.swift";
+			path = "ActionHubApp/Infrastructure/QRScannerView.swift";
+			sourceTree = "<group>";
+		};
+		A8B5504027501ECD5972D811 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "TriageView.swift";
+			path = "ActionHubApp/Features/Focus/TriageView.swift";
+			sourceTree = "<group>";
+		};
+		AA9181503E942801FD945D38 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "RootView.swift";
+			path = "ActionHubApp/App/RootView.swift";
+			sourceTree = "<group>";
+		};
+		AF56361B6C242EFA62A4B231 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "TodayView.swift";
+			path = "ActionHubApp/Features/Today/TodayView.swift";
+			sourceTree = "<group>";
+		};
+		B154E6245AF9551D65EEA858 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "FocusSessionView.swift";
+			path = "ActionHubApp/Features/Focus/FocusSessionView.swift";
+			sourceTree = "<group>";
+		};
+		B1AE742CD2758C918FBE98B8 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "AppGroupStore.swift";
+			path = "ActionHubApp/Infrastructure/AppGroupStore.swift";
+			sourceTree = "<group>";
+		};
+		B6CDB6E5D160E013280D3C68 = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.application;
+			includeInIndex = 0;
+			path = ActionHubApp.app;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		BA280059C87EB65AE6C9144F = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "CaptureView.swift";
+			path = "ActionHubApp/Features/Capture/CaptureView.swift";
+			sourceTree = "<group>";
+		};
+		C22F502B612DC8E026F74FCE = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "BiometricLock.swift";
+			path = "ActionHubApp/Infrastructure/BiometricLock.swift";
+			sourceTree = "<group>";
+		};
+		C2F8842D76C5916E7EB24698 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "ReviewView.swift";
+			path = "ActionHubApp/Features/Review/ReviewView.swift";
+			sourceTree = "<group>";
+		};
+		C909F0499BDFD86F78D7EC05 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "NotificationManager.swift";
+			path = "ActionHubApp/Infrastructure/NotificationManager.swift";
+			sourceTree = "<group>";
+		};
+		D04EFA917870BF2F980921E0 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.xcconfig;
+			path = Release.xcconfig;
+			sourceTree = "<group>";
+		};
+		D413E90240E67D4A2C6F8041 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "MatrixFocusView.swift";
+			path = "ActionHubApp/Features/Focus/MatrixFocusView.swift";
+			sourceTree = "<group>";
+		};
+		D713469F5B32ED43EDD0BC4A = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.assetcatalog;
+			name = Assets.xcassets;
+			path = ActionHubApp/Resources/Assets.xcassets;
+			sourceTree = "<group>";
+		};
+		D95E144E488D5EF5035FE87E = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "ActionHubWidget.swift";
+			path = "ActionHubWidgetExtension/ActionHubWidget.swift";
+			sourceTree = "<group>";
+		};
+		DF74A5AC8A25C338C2A2DFBE = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "ShareViewController.swift";
+			path = "ActionHubShareExtension/ShareViewController.swift";
+			sourceTree = "<group>";
+		};
+		E041964717F0E01A48FC5D7A = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.entitlements;
+			path = ActionHubShareExtension.entitlements;
+			sourceTree = "<group>";
+		};
+		E582AC3A8B6AEE3C6309D5AD = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "PlanDetailView.swift";
+			path = "ActionHubApp/Features/Review/PlanDetailView.swift";
+			sourceTree = "<group>";
+		};
+		E71C90507EE7525A9470A6D9 = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.app-extension;
+			includeInIndex = 0;
+			path = ActionHubShareExtension.appex;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		E94C011B41C0A5E3E04B75D0 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.entitlements;
+			path = ActionHubWidgetExtension.entitlements;
+			sourceTree = "<group>";
+		};
+		EC27582686B5B338565C2E5E = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "AppConfiguration.swift";
+			path = "ActionHubApp/Infrastructure/AppConfiguration.swift";
+			sourceTree = "<group>";
+		};
+		F6F01C81A58E5B1F1093BC7B = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			name = "FocusHomeView.swift";
+			path = "ActionHubApp/Features/Focus/FocusHomeView.swift";
+			sourceTree = "<group>";
+		};
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		40D79F40A8593FA508DC545F = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C8F42D32F1652F6ED0793F99 /* ActionHubCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C19A4328C9961E8F8A7CF4CD = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AEA898B39BF9D7A0058655D0 /* ActionHubCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		CF4A7D01C3CDAF7186872277 = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				890D00F4FB45EE193B107CB1 /* ActionHubCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		00C45FD35CB0F9C5F764F070 = {
+			isa = PBXGroup;
+			children = (
+				B6CDB6E5D160E013280D3C68 /* ActionHubApp.app */,
+				E71C90507EE7525A9470A6D9 /* ActionHubShareExtension.appex */,
+				4C47665D1BA4105DF9684DC4 /* ActionHubWidgetExtension.appex */,
+			);
+			name = "Products";
+			sourceTree = "<group>";
+		};
+		13407D3C6CA3655F92F93B61 = {
+			isa = PBXGroup;
+			children = (
+				DF74A5AC8A25C338C2A2DFBE /* ShareViewController.swift */,
+			);
+			name = "ActionHubShareExtension";
+			sourceTree = "<group>";
+		};
+		CF8D0BD4B75E8C2C174692A5 = {
+			isa = PBXGroup;
+			children = (
+				5BE4447B6FDC24B384A39DA0 /* Swift source */,
+				2E0A43A558AAFE7FEBB5AB0D /* Swift source */,
+				A7866D51EE741B4D32C48725 /* Swift source */,
+				AA9181503E942801FD945D38 /* Swift source */,
+				265A5E76BC9A37CF6B500C78 /* Swift source */,
+				BA280059C87EB65AE6C9144F /* Swift source */,
+				5552F3079689B66AAA9CEF34 /* Swift source */,
+				7407628973E2CF9B0C53CDF4 /* Swift source */,
+				F6F01C81A58E5B1F1093BC7B /* Swift source */,
+				B154E6245AF9551D65EEA858 /* Swift source */,
+				D413E90240E67D4A2C6F8041 /* Swift source */,
+				A8B5504027501ECD5972D811 /* Swift source */,
+				27DBD131D7B48B94D05789B8 /* Swift source */,
+				228E0A6451A5EB74C651B2D0 /* Swift source */,
+				E582AC3A8B6AEE3C6309D5AD /* Swift source */,
+				C2F8842D76C5916E7EB24698 /* Swift source */,
+				A16589B744EC4CA610D8A9F3 /* Swift source */,
+				AF56361B6C242EFA62A4B231 /* Swift source */,
+				0990C4E3DFEBF3CC4B454ECE /* Swift source */,
+				EC27582686B5B338565C2E5E /* Swift source */,
+				B1AE742CD2758C918FBE98B8 /* Swift source */,
+				5F82C3FD37706013125CE72C /* Swift source */,
+				C22F502B612DC8E026F74FCE /* Swift source */,
+				2E4727EDB02E0D302F786E4E /* Swift source */,
+				42D57157909BF4223DB2601E /* Swift source */,
+				C909F0499BDFD86F78D7EC05 /* Swift source */,
+				A87ECFA003E7C53B74D564FF /* Swift source */,
+				85195A9E613C7DDDED9A257A /* Swift source */,
+				D713469F5B32ED43EDD0BC4A /* Assets.xcassets */,
+				92DD50CC5F3F864B34399DDD /* PrivacyInfo.xcprivacy */,
+			);
+			name = ActionHubApp;
+			sourceTree = "<group>";
+		};
+		D35BDCF6803CCB1A9C4483A8 = {
+			isa = PBXGroup;
+			children = (
+				789451737A6E2D6058D3B182 /* Shared.xcconfig */,
+				56CCD298F0CC02E86170C53F /* Debug.xcconfig */,
+				D04EFA917870BF2F980921E0 /* Release.xcconfig */,
+				70BC018ACCE042997D29B1D5 /* ActionHubApp-Info.plist */,
+				8EAEDD9B3317650CED59D4BD /* ShareExtension-Info.plist */,
+				0CF88675E3582D98566E1F60 /* WidgetExtension-Info.plist */,
+				86A61BF7C7DE0F05DD3CD1C3 /* ActionHubApp.entitlements */,
+				E041964717F0E01A48FC5D7A /* ActionHubShareExtension.entitlements */,
+				E94C011B41C0A5E3E04B75D0 /* ActionHubWidgetExtension.entitlements */,
+			);
+			name = "Config";
+			path = "Config";
+			sourceTree = "<group>";
+		};
+		D45CB4A487390B4D06F7B760 = {
+			isa = PBXGroup;
+			children = (
+				D95E144E488D5EF5035FE87E /* ActionHubWidget.swift */,
+			);
+			name = "ActionHubWidgetExtension";
+			sourceTree = "<group>";
+		};
+		DF891E785808226D241F246E = {
+			isa = PBXGroup;
+			children = (
+				CF8D0BD4B75E8C2C174692A5 /* ActionHubApp */,
+				13407D3C6CA3655F92F93B61 /* ActionHubShareExtension */,
+				D45CB4A487390B4D06F7B760 /* ActionHubWidgetExtension */,
+				D35BDCF6803CCB1A9C4483A8 /* Config */,
+				00C45FD35CB0F9C5F764F070 /* Products */,
+			);
+			name = "JM-AI-Action-Hub-iOS";
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		1A6609CC8685B17F5F513A3B = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 416CBBFE8ED08C7505E56156 /* Build configuration list for PBXNativeTarget ActionHubShareExtension */;
+			buildPhases = (
+				B1BC3F69C68D717E7CAA7A5D /* Sources */,
+				CF4A7D01C3CDAF7186872277 /* Frameworks */,
+				D624FFB4E0902FC5629F7D58 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = ActionHubShareExtension;
+			packageProductDependencies = (
+				1590E354A479ABDDA7461C13 /* ActionHubCore */,
+			);
+			productName = ActionHubShareExtension;
+			productReference = E71C90507EE7525A9470A6D9 /* ActionHubShareExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		29C7B681C8D62CBAC94D51C0 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 32995943DE67267A65D32CA9 /* Build configuration list for PBXNativeTarget ActionHubApp */;
+			buildPhases = (
+				D10ECEDA0FB53BA093BEC557 /* Sources */,
+				C19A4328C9961E8F8A7CF4CD /* Frameworks */,
+				C84B5C31679C986BFD935BC6 /* Resources */,
+				2F933BA841895383DA49EE9D /* Embed App Extensions */,
+			);
+			buildRules = ();
+			dependencies = (
+				990E07EB0F23E08E96FCDF37 /* PBXTargetDependency */,
+				A4C80477431259D93FE11E57 /* PBXTargetDependency */,
+			);
+			name = ActionHubApp;
+			packageProductDependencies = (
+				7780FA18CFED217DCB5CFAD8 /* ActionHubCore */,
+			);
+			productName = ActionHubApp;
+			productReference = B6CDB6E5D160E013280D3C68 /* ActionHubApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A5A0AA9F4FB5BC8D9254438A = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 0F2F9B54D12A43C3DA590081 /* Build configuration list for PBXNativeTarget ActionHubWidgetExtension */;
+			buildPhases = (
+				340B44853D0D58738451C8F7 /* Sources */,
+				40D79F40A8593FA508DC545F /* Frameworks */,
+				44C1AF857B0FE8DD6E732654 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			name = ActionHubWidgetExtension;
+			packageProductDependencies = (
+				BF43301C8C1AD736E4674253 /* ActionHubCore */,
+			);
+			productName = ActionHubWidgetExtension;
+			productReference = 4C47665D1BA4105DF9684DC4 /* ActionHubWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		98F54143AB4E86B28C3AFEE0 = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					29C7B681C8D62CBAC94D51C0 = { CreatedOnToolsVersion = 16.0; };
+					1A6609CC8685B17F5F513A3B = { CreatedOnToolsVersion = 16.0; };
+					A5A0AA9F4FB5BC8D9254438A = { CreatedOnToolsVersion = 16.0; };
+				};
+			};
+			buildConfigurationList = 12D04D787E90C9B967248BFD /* Build configuration list for PBXProject */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (en, Base, ko, );
+			mainGroup = DF891E785808226D241F246E /* Main Group */;
+			productRefGroup = 00C45FD35CB0F9C5F764F070 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			packageReferences = (
+				E1823BFFAEB4E505466451C6 /* XCLocalSwiftPackageReference "ActionHubCore" */,
+			);
+			targets = (
+				29C7B681C8D62CBAC94D51C0 /* ActionHubApp */,
+				1A6609CC8685B17F5F513A3B /* ActionHubShareExtension */,
+				A5A0AA9F4FB5BC8D9254438A /* ActionHubWidgetExtension */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		44C1AF857B0FE8DD6E732654 = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C84B5C31679C986BFD935BC6 = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FB90684E69A6C96ED866993E /* Assets.xcassets in Resources */,
+				B397C018A17BFBF166508EA2 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D624FFB4E0902FC5629F7D58 = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = ();
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		340B44853D0D58738451C8F7 = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				BBDAE806E8A79C76D4A29C7F /* Swift source in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		B1BC3F69C68D717E7CAA7A5D = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E93C58BF757A248E33FB27F /* Swift source in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D10ECEDA0FB53BA093BEC557 = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				1BB67D51211D7434198F7288 /* Swift source in Sources */,
+				CC6C5B45965EE1082E7ACB7E /* Swift source in Sources */,
+				815E53775CB1AAB2E5F33926 /* Swift source in Sources */,
+				D658EEC011A106FC3EDF59A4 /* Swift source in Sources */,
+				4715B4E2F6FF15AC1EFB9740 /* Swift source in Sources */,
+				6F785D506E8C4538B54633F9 /* Swift source in Sources */,
+				9FB63BC0C5F51564705ADA46 /* Swift source in Sources */,
+				BE804A3A7295421E9B6DE344 /* Swift source in Sources */,
+				50898E5E2D73503CF7AC2BF1 /* Swift source in Sources */,
+				C2BED6544D10C9A50E4BCC02 /* Swift source in Sources */,
+				4A4E97ECD9A3EEFFADC4E9AC /* Swift source in Sources */,
+				E71EC0D1DA41F3066545E8FB /* Swift source in Sources */,
+				95C489FC10498CB7FC0FDD8E /* Swift source in Sources */,
+				29A9CC0D4CDE43EA95987E37 /* Swift source in Sources */,
+				C80E12EE3FF45EB928F52CD4 /* Swift source in Sources */,
+				EA5902AE1922499CDDDF442A /* Swift source in Sources */,
+				9C902A2944878801737B0DBC /* Swift source in Sources */,
+				D2A8E1192DA24FEA68DEED48 /* Swift source in Sources */,
+				D1E79CAB4119178E520A55D6 /* Swift source in Sources */,
+				B3E66F8FBC5391C621549EFA /* Swift source in Sources */,
+				3A44997912DAC789A424B90A /* Swift source in Sources */,
+				59542DAD63F6EE4EFF93F09D /* Swift source in Sources */,
+				A314FF3827CCE0D02E046366 /* Swift source in Sources */,
+				3FDD9940231E2F14A3AE2D3F /* Swift source in Sources */,
+				754E6E57957000C162A2BE64 /* Swift source in Sources */,
+				EE373BCF3AAA3D0332470409 /* Swift source in Sources */,
+				CAF6B3C6EF1EC05260B21E05 /* Swift source in Sources */,
+				F86772ADE8B364D34A69E7E4 /* Swift source in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		990E07EB0F23E08E96FCDF37 = {
+			isa = PBXTargetDependency;
+			target = 1A6609CC8685B17F5F513A3B /* ActionHubShareExtension */;
+			targetProxy = 991158F1E81F0D6E3C5D00A0 /* PBXContainerItemProxy */;
+		};
+		A4C80477431259D93FE11E57 = {
+			isa = PBXTargetDependency;
+			target = A5A0AA9F4FB5BC8D9254438A /* ActionHubWidgetExtension */;
+			targetProxy = 0DD22CB6C2E8E29B0AF6C12D /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		23FB2CAEB38545C3793097DD = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D04EFA917870BF2F980921E0 /* Release.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon";
+				CODE_SIGN_ENTITLEMENTS = "Config/ActionHubApp.entitlements";
+				GENERATE_INFOPLIST_FILE = "NO";
+				INFOPLIST_FILE = "Config/ActionHubApp-Info.plist";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ACTION_HUB_BUNDLE_PREFIX).ios";
+				PRODUCT_NAME = "ActionHubApp";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		3CF6A4F2E05B3AAE7E2CBFEE = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 56CCD298F0CC02E86170C53F /* Debug.xcconfig */;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon";
+				CODE_SIGN_ENTITLEMENTS = "Config/ActionHubApp.entitlements";
+				GENERATE_INFOPLIST_FILE = "NO";
+				INFOPLIST_FILE = "Config/ActionHubApp-Info.plist";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ACTION_HUB_BUNDLE_PREFIX).ios";
+				PRODUCT_NAME = "ActionHubApp";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		4EB605AD2E4EE7316ACCD6DD = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D04EFA917870BF2F980921E0 /* Release.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = "YES";
+				CODE_SIGN_ENTITLEMENTS = "Config/ActionHubWidgetExtension.entitlements";
+				GENERATE_INFOPLIST_FILE = "NO";
+				INFOPLIST_FILE = "Config/WidgetExtension-Info.plist";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ACTION_HUB_BUNDLE_PREFIX).ios.widget";
+				PRODUCT_NAME = "ActionHubWidgetExtension";
+				SKIP_INSTALL = "YES";
+			};
+			name = Release;
+		};
+		877A6BA951A2EA0025A2ABE8 = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 56CCD298F0CC02E86170C53F /* Debug.xcconfig */;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = "YES";
+				SWIFT_VERSION = "6.0";
+			};
+			name = Debug;
+		};
+		959134B361DD7E21ADEA3164 = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D04EFA917870BF2F980921E0 /* Release.xcconfig */;
+			buildSettings = {
+				CLANG_ENABLE_MODULES = "YES";
+				SWIFT_VERSION = "6.0";
+			};
+			name = Release;
+		};
+		B1CC708AA04CE03E50500D0F = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = D04EFA917870BF2F980921E0 /* Release.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = "YES";
+				CODE_SIGN_ENTITLEMENTS = "Config/ActionHubShareExtension.entitlements";
+				GENERATE_INFOPLIST_FILE = "NO";
+				INFOPLIST_FILE = "Config/ShareExtension-Info.plist";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ACTION_HUB_BUNDLE_PREFIX).ios.share";
+				PRODUCT_NAME = "ActionHubShareExtension";
+				SKIP_INSTALL = "YES";
+			};
+			name = Release;
+		};
+		EC67D5E0941452A31546C2BE = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 56CCD298F0CC02E86170C53F /* Debug.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = "YES";
+				CODE_SIGN_ENTITLEMENTS = "Config/ActionHubShareExtension.entitlements";
+				GENERATE_INFOPLIST_FILE = "NO";
+				INFOPLIST_FILE = "Config/ShareExtension-Info.plist";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ACTION_HUB_BUNDLE_PREFIX).ios.share";
+				PRODUCT_NAME = "ActionHubShareExtension";
+				SKIP_INSTALL = "YES";
+			};
+			name = Debug;
+		};
+		F4B7E5BA8E58CF01A465BB80 = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = 56CCD298F0CC02E86170C53F /* Debug.xcconfig */;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = "YES";
+				CODE_SIGN_ENTITLEMENTS = "Config/ActionHubWidgetExtension.entitlements";
+				GENERATE_INFOPLIST_FILE = "NO";
+				INFOPLIST_FILE = "Config/WidgetExtension-Info.plist";
+				PRODUCT_BUNDLE_IDENTIFIER = "$(ACTION_HUB_BUNDLE_PREFIX).ios.widget";
+				PRODUCT_NAME = "ActionHubWidgetExtension";
+				SKIP_INSTALL = "YES";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		0F2F9B54D12A43C3DA590081 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				F4B7E5BA8E58CF01A465BB80 /* Debug */,
+				4EB605AD2E4EE7316ACCD6DD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		12D04D787E90C9B967248BFD = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				877A6BA951A2EA0025A2ABE8 /* Debug */,
+				959134B361DD7E21ADEA3164 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		32995943DE67267A65D32CA9 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				3CF6A4F2E05B3AAE7E2CBFEE /* Debug */,
+				23FB2CAEB38545C3793097DD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		416CBBFE8ED08C7505E56156 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EC67D5E0941452A31546C2BE /* Debug */,
+				B1CC708AA04CE03E50500D0F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		E1823BFFAEB4E505466451C6 = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/ActionHubCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		1590E354A479ABDDA7461C13 = {
+			isa = XCSwiftPackageProductDependency;
+			package = E1823BFFAEB4E505466451C6 /* XCLocalSwiftPackageReference "ActionHubCore" */;
+			productName = ActionHubCore;
+		};
+		7780FA18CFED217DCB5CFAD8 = {
+			isa = XCSwiftPackageProductDependency;
+			package = E1823BFFAEB4E505466451C6 /* XCLocalSwiftPackageReference "ActionHubCore" */;
+			productName = ActionHubCore;
+		};
+		BF43301C8C1AD736E4674253 = {
+			isa = XCSwiftPackageProductDependency;
+			package = E1823BFFAEB4E505466451C6 /* XCLocalSwiftPackageReference "ActionHubCore" */;
+			productName = ActionHubCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+
+	};
+	rootObject = 98F54143AB4E86B28C3AFEE0 /* Project object */;
+}

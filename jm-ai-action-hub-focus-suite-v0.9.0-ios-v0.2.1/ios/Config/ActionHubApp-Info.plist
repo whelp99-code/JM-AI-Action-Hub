@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>ActionHubAppGroup</key>
+	<string>$(ACTION_HUB_APP_GROUP)</string>
+	<key>CFBundleDisplayName</key>
+	<string>Action Hub</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>JM-AI Action Hub</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>jmactionhub</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>Action Hub 서버의 페어링 QR 코드를 스캔하는 데 카메라를 사용합니다.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>업무 내용과 실행 상태를 보호하기 위해 Face ID를 사용합니다.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>음성으로 실행 항목을 수집하기 위해 마이크를 사용합니다.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>말한 내용을 실행 항목 텍스트로 변환하기 위해 음성 인식을 사용합니다.</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+	</dict>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>fetch</string>
+	</array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>$(ACTION_HUB_BUNDLE_PREFIX).ios.refresh</string>
+	</array>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+	</array>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+	<key>NSSupportsLiveActivitiesFrequentUpdates</key>
+	<false/>
+</dict>
+</plist>

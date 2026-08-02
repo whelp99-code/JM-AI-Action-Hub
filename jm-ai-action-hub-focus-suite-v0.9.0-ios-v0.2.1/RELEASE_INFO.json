@@ -1,0 +1,10 @@
+{
+  "suite": "JM-AI Action Hub Focus Control Suite",
+  "server_version": "0.9.0",
+  "ios_version": "0.2.1",
+  "server_commit": "69305e23373c3a7a0e58be1a05ac1bbdaf2bfde0",
+  "ios_commit": "534ad6504355330ca8dcc098d0384019c9652bce",
+  "openapi_sha256": "b5ae0361a4b4b1cf22f29ff4742d927f6fa839e2faebca7a1a805842eaa10fbc",
+  "release_date": "2026-08-01",
+  "status": "source/runtime release candidate; Apple signing and device acceptance pending"
+}

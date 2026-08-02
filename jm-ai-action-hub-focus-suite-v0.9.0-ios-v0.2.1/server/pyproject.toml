@@ -1,0 +1,59 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jm-ai-action-hub"
+version = "0.9.0"
+description = "Closed-loop human-AI action control with native decision and focus orchestration"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "JM-AI" }]
+dependencies = [
+  "fastapi>=0.115,<1.0",
+  "uvicorn[standard]>=0.34,<1.0",
+  "pydantic>=2.10,<3.0",
+  "pydantic-settings>=2.7,<3.0",
+  "sqlalchemy>=2.0,<3.0",
+  "alembic>=1.14,<2.0",
+  "httpx[http2]>=0.28,<1.0",
+  "cryptography>=44,<47",
+  "qrcode>=8,<9",
+  "tzdata>=2025.1",
+]
+
+[project.optional-dependencies]
+postgres = ["psycopg[binary]>=3.2,<4.0"]
+mcp = ["mcp>=1.12,<2.0"]
+dev = [
+  "pytest>=8.3,<10.0",
+  "pytest-cov>=6.0,<8.0",
+  "ruff>=0.11,<1.0",
+  "build>=1.2,<2.0",
+]
+
+[project.scripts]
+action-hub = "action_hub.cli:main"
+action-hub-mcp = "action_hub.mcp_server:main"
+action-hub-worker = "action_hub.worker:main"
+
+[tool.setuptools.packages.find]
+include = ["action_hub*"]
+
+[tool.setuptools.package-data]
+action_hub = ["web/*", "migrations/*.py", "migrations/*.mako", "migrations/versions/*.py"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --disable-warnings"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 110
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501", "B008"]
