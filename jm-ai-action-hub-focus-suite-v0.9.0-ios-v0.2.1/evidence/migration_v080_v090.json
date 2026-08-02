@@ -1,0 +1,20 @@
+{
+  "alembic_revision": "0005_decision_focus_foundation",
+  "plan_preserved": true,
+  "item_ids_preserved": true,
+  "titles_preserved": true,
+  "attention_defaults": [
+    "untriaged",
+    "untriaged"
+  ],
+  "focus_tables": [
+    "carry_over_decisions",
+    "daily_commitments",
+    "daily_focus_plans",
+    "focus_sessions",
+    "micro_steps",
+    "priority_assessments"
+  ],
+  "api_plan_status": 200,
+  "triage_total": 2
+}

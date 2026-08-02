@@ -1,0 +1,12 @@
+PRODUCT_NAME = Action Hub
+MARKETING_VERSION = 0.2.1
+CURRENT_PROJECT_VERSION = 21
+IPHONEOS_DEPLOYMENT_TARGET = 18.0
+SWIFT_VERSION = 6.0
+DEVELOPMENT_TEAM =
+CODE_SIGN_STYLE = Automatic
+ACTION_HUB_BUNDLE_PREFIX = com.jmactionhub
+ACTION_HUB_APP_GROUP = group.com.jmactionhub.shared
+
+// Local signing and bundle overrides. Never store credentials here.
+#include? "Local.xcconfig"

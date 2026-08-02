@@ -1,0 +1,66 @@
+name: JM-AI-Action-Hub-iOS
+options:
+  bundleIdPrefix: com.jmactionhub
+  deploymentTarget:
+    iOS: "18.0"
+  xcodeVersion: "16.0"
+configs:
+  Debug: debug
+  Release: release
+configFiles:
+  Debug: Config/Debug.xcconfig
+  Release: Config/Release.xcconfig
+packages:
+  ActionHubCore:
+    path: Packages/ActionHubCore
+targets:
+  ActionHubApp:
+    type: application
+    platform: iOS
+    sources:
+      - ActionHubApp
+    info:
+      path: Config/ActionHubApp-Info.plist
+    entitlements:
+      path: Config/ActionHubApp.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(ACTION_HUB_BUNDLE_PREFIX).ios
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+    dependencies:
+      - package: ActionHubCore
+      - target: ActionHubShareExtension
+        embed: true
+      - target: ActionHubWidgetExtension
+        embed: true
+  ActionHubShareExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ActionHubShareExtension
+    info:
+      path: Config/ShareExtension-Info.plist
+    entitlements:
+      path: Config/ActionHubShareExtension.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(ACTION_HUB_BUNDLE_PREFIX).ios.share
+        APPLICATION_EXTENSION_API_ONLY: YES
+    dependencies:
+      - package: ActionHubCore
+  ActionHubWidgetExtension:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ActionHubWidgetExtension
+    info:
+      path: Config/WidgetExtension-Info.plist
+    entitlements:
+      path: Config/ActionHubWidgetExtension.entitlements
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(ACTION_HUB_BUNDLE_PREFIX).ios.widget
+        APPLICATION_EXTENSION_API_ONLY: YES
+    dependencies:
+      - package: ActionHubCore

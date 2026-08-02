@@ -1,0 +1,43 @@
+services:
+  action-hub:
+    build:
+      context: .
+    env_file: .env
+    environment:
+      ACTION_HUB_DATABASE_URL: postgresql+psycopg://actionhub:${POSTGRES_PASSWORD}@postgres:5432/actionhub
+      ACTION_HUB_WORKER_INLINE: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  action-hub-worker:
+    build:
+      context: .
+    env_file: .env
+    environment:
+      ACTION_HUB_DATABASE_URL: postgresql+psycopg://actionhub:${POSTGRES_PASSWORD}@postgres:5432/actionhub
+      ACTION_HUB_WORKER_INLINE: "false"
+      ACTION_HUB_RUN_MIGRATIONS: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      action-hub:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: actionhub
+      POSTGRES_USER: actionhub
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - action_hub_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U actionhub -d actionhub"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  action_hub_postgres:

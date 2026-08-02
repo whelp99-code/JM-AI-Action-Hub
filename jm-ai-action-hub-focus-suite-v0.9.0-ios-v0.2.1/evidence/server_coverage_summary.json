@@ -1,0 +1,9 @@
+{
+  "files": 60,
+  "statements": 6301,
+  "missing": 1089,
+  "excluded": 43,
+  "coverage_percent": 82.717,
+  "gate_percent": 80.0,
+  "gate_passed": true
+}

@@ -1,0 +1,24 @@
+[Unit]
+Description=JM-AI Action Hub durable control-loop worker
+After=network-online.target jm-ai-action-hub.service
+Wants=network-online.target
+Requires=jm-ai-action-hub.service
+
+[Service]
+Type=simple
+User=actionhub
+Group=actionhub
+WorkingDirectory=/opt/jm-ai-action-hub
+EnvironmentFile=/opt/jm-ai-action-hub/.env
+Environment=ACTION_HUB_WORKER_INLINE=false
+Environment=ACTION_HUB_RUN_MIGRATIONS=false
+ExecStart=/opt/jm-ai-action-hub/.venv/bin/action-hub-worker
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/jm-ai-action-hub/data
+
+[Install]
+WantedBy=multi-user.target

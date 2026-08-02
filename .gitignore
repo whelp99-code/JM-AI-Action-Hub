@@ -1,0 +1,32 @@
+.DS_Store
+**/.DS_Store
+
+# Local secrets and environment
+**/.env
+**/.env.local
+**/.env.*.local
+!**/.env.example
+
+# Python and local tooling
+**/.venv/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+**/.mypy_cache/
+**/.coverage
+**/htmlcov/
+
+# JavaScript and Swift build output
+**/node_modules/
+**/.next/
+**/.build/
+**/DerivedData/
+**/xcuserdata/
+**/*.tsbuildinfo
+
+# Local runtime state
+**/*.db
+**/*.db-*
+**/data/exports/*
+**/backups/*
