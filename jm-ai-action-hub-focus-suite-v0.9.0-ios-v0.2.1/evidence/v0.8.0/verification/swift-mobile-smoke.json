@@ -1,0 +1,12 @@
+{
+  "activity_count" : 10,
+  "capture_status" : "processed",
+  "change_count" : 10,
+  "device_id" : "de0ca301-1a52-4e3b-986d-aec18e22022a",
+  "execution_completed" : 1,
+  "execution_failed" : 0,
+  "plan_id" : "252078f7-d9fe-4074-9b86-41094a87e282",
+  "review_count_after" : 0,
+  "review_count_before" : 0,
+  "server_version" : "0.8.0"
+}

@@ -1,0 +1,18 @@
+{
+  "activity": 10,
+  "capture_status": "processed",
+  "changes": 10,
+  "device_id": "f7d8d858-3af5-40c4-9c0c-30b12c2aa873",
+  "execution_completed": 2,
+  "execution_failed": 0,
+  "plan_id": "ba99bf0f-9678-4c09-82e2-81ae04a862f7",
+  "push_processed": 1,
+  "push_state": "simulated",
+  "review_after": 0,
+  "review_before": 0,
+  "revoked_access_status": 401,
+  "revoked_refresh_status": 401,
+  "server_version": "0.8.0",
+  "stale_revision_status": 409,
+  "status": "ok"
+}

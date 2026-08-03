@@ -1,0 +1,6 @@
+[0/1] Planning build
+Building for production...
+[0/2] Write swift-version--1BA0962812E73E12.txt
+[2/3] Compiling ActionHubCore APIError.swift
+[3/4] Compiling ActionHubMobileSmoke main.swift
+Build complete! (6.29s)
