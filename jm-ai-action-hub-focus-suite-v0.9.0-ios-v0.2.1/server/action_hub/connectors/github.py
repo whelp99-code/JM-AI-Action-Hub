@@ -63,7 +63,6 @@ class GitHubConnector:
         if not repository or repository.count("/") != 1:
             return ConnectorResult(success=False, payload=payload, error="GitHub repository must be owner/repo")
         if self.settings.execution_mode == "dry_run":
-            simulated_number = uuid.uuid4().int % 100000
             simulated_id = f"dry-github-{uuid.uuid4()}"
             return ConnectorResult(
                 success=True,

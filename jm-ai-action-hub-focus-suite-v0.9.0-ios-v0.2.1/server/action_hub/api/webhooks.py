@@ -10,7 +10,6 @@ from ..services.webhooks import (
     receive_webhook,
 )
 
-
 webhook_router = APIRouter(prefix="/api/v1/webhooks", tags=["webhooks"])
 
 

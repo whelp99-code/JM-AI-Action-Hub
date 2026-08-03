@@ -11,7 +11,7 @@ public protocol HTTPTransport: Sendable {
 public struct URLSessionTransport: HTTPTransport, @unchecked Sendable {
   private let session: URLSession
 
-  public init(configuration: URLSessionConfiguration = .ephemeral) {
+  public init(configuration: URLSessionConfiguration = .ephemeral, appVersion: String? = nil) {
     #if !os(Linux)
       configuration.waitsForConnectivity = true
     #endif
@@ -19,9 +19,20 @@ public struct URLSessionTransport: HTTPTransport, @unchecked Sendable {
     configuration.timeoutIntervalForResource = 60
     configuration.httpAdditionalHeaders = [
       "Accept": "application/json",
-      "User-Agent": "JM-AI-Action-Hub-iOS/0.1",
+      "User-Agent": Self.userAgent(appVersion: appVersion),
     ]
     self.session = URLSession(configuration: configuration)
+  }
+
+  static func userAgent(appVersion: String?) -> String {
+    "JM-AI-Action-Hub-iOS/\(sanitizedVersion(appVersion))"
+  }
+
+  private static func sanitizedVersion(_ appVersion: String?) -> String {
+    guard let appVersion, appVersion.wholeMatch(of: /[0-9]+\.[0-9]+\.[0-9]+/) != nil else {
+      return "unknown"
+    }
+    return appVersion
   }
 
   public func data(for request: URLRequest) async throws -> (Data, HTTPURLResponse) {

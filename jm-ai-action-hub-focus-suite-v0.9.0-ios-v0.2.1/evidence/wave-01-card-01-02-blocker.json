@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "wave": "01",
+  "recordedAt": "2026-08-02T18:00:36Z",
+  "repositoryHead": "9c8f28d5a9eb34a2c30a869be620885023171977",
+  "deliveryState": "UNCOMMITTED_WORKTREE",
+  "orchestration": {
+    "runId": "run_21bd633062ba",
+    "card0101TaskId": "task_e1a38fdc6b71",
+    "card0102TaskId": "task_582445cb6d45",
+    "card0102DispatchId": "ctx_e0c378b409cf"
+  },
+  "progress": {
+    "CARD-01-01": {
+      "state": "DONE",
+      "focusedCommand": "cd server && PYTHONPATH=. .venv/bin/python -m pytest -q tests/test_focus.py -k matrix",
+      "focusedExitCode": 0,
+      "focusedSummary": "1 passed",
+      "scope": [
+        "server/action_hub/services/focus.py",
+        "server/tests/test_focus.py"
+      ]
+    },
+    "CARD-01-02": {
+      "state": "IMPLEMENTED_VERIFY_BLOCKED",
+      "scope": [
+        "ios/Packages/ActionHubCore/Sources/ActionHubCore/OfflineCaptureQueue.swift",
+        "ios/Packages/ActionHubCore/Tests/ActionHubCoreTests/OfflineCaptureQueueTests.swift",
+        "ios/ActionHubApp/App/AppModel.swift",
+        "ios/ActionHubApp/Features/Settings/SettingsView.swift",
+        "ios/scripts/validate_ios_project.py",
+        "ios/Packages/ActionHubCore/Package.swift",
+        "ios/Packages/ActionHubCore/Sources/OfflineCaptureQueueProbe/main.swift",
+        "ios/scripts/test_offline_queue_multiprocess.sh",
+        "ios/docs/12_KNOWN_LIMITATIONS_KR.md",
+        "server/tests/test_mobile.py"
+      ],
+      "implemented": [
+        "versioned queue records and legacy decoding order",
+        "five-failure DLQ transition",
+        "network failure non-increment path",
+        "production lock and atomic persistence",
+        "confirmed restore and purge controls",
+        "multiprocess conservation and same-record contention probe"
+      ]
+    }
+  },
+  "verification": [
+    {
+      "command": "cd ios && swift test --package-path Packages/ActionHubCore --filter OfflineCaptureQueueTests",
+      "exitCode": 1,
+      "summary": "Build stops before tests: FocusActivityAttributes.swift uses ActivityAttributes on macOS."
+    },
+    {
+      "command": "cd ios && bash scripts/test_offline_queue_multiprocess.sh",
+      "exitCode": 1,
+      "summary": "Probe build stops on the same non-owned ActivityKit availability error; sentinel not reached."
+    },
+    {
+      "command": "cd ios && python3 scripts/validate_ios_project.py",
+      "exitCode": 0,
+      "summary": "IOS_PROJECT_STATIC_OK sources=30"
+    },
+    {
+      "command": "cd server && PYTHONPATH=. .venv/bin/python -m pytest -q tests/test_mobile.py -k capture",
+      "exitCode": 0,
+      "summary": "5 passed"
+    },
+    {
+      "command": "cd ios && bash -n scripts/test_offline_queue_multiprocess.sh",
+      "exitCode": 0,
+      "summary": "shell syntax valid"
+    },
+    {
+      "command": "git diff --check -- ios server",
+      "exitCode": 0,
+      "summary": "no whitespace errors"
+    }
+  ],
+  "blocker": {
+    "file": "ios/Packages/ActionHubCore/Sources/ActionHubCore/FocusActivityAttributes.swift",
+    "line": 1,
+    "currentGuard": "#if canImport(ActivityKit)",
+    "compilerError": "'ActivityAttributes' is unavailable in macOS",
+    "plannedOwner": "CARD-02-04",
+    "plannedCorrection": "#if canImport(ActivityKit) && os(iOS)",
+    "phase1Ownership": false,
+    "impact": "CARD-01-02 and CARD-01-03 exact Swift verification commands cannot enter their tests on this macOS host."
+  },
+  "decisionRequired": {
+    "recommended": "Authorize the CARD-02-04 availability guard as an early bounded prerequisite, retain its Phase 2 trace, then retry CARD-01-02 and continue the existing Phase 1 DAG.",
+    "alternative": "Keep CARD-02-04 in Phase 2; Wave 01 remains blocked and CARD-01-03/04 are not dispatched past the declared dependency chain."
+  },
+  "prohibitedActionsObserved": {
+    "commit": false,
+    "push": false,
+    "pullRequest": false,
+    "merge": false,
+    "iosDeviceSigning": false,
+    "externalProductionChange": false
+  }
+}

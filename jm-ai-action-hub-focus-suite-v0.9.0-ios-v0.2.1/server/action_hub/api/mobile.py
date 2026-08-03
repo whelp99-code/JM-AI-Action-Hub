@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from ..models import ActionItem, ItemState, MobileDevice, PushNotification
+from ..models import ItemState, MobileDevice, PushNotification
 from ..schemas import (
     ActionItemUpdate,
     ExecutionSummary,
@@ -72,6 +72,7 @@ def _auth_error(exc: MobileAuthError) -> HTTPException:
         "pairing_unavailable": status.HTTP_409_CONFLICT,
         "mobile_disabled": status.HTTP_503_SERVICE_UNAVAILABLE,
         "mobile_auth_not_configured": status.HTTP_503_SERVICE_UNAVAILABLE,
+        "mobile_secret_reuses_admin_key": status.HTTP_503_SERVICE_UNAVAILABLE,
     }
     return HTTPException(status_code=mapping.get(exc.code, status.HTTP_401_UNAUTHORIZED), detail=str(exc))
 

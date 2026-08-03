@@ -96,7 +96,7 @@ Action Hub Server v0.9.0 Mobile + Focus Gateway
   ├─ 회전형 Refresh Token + 재사용 탐지
   ├─ Capture Idempotency
   ├─ Revision Conflict
-  ├─ Delta Sync Cursor
+  ├─ iOS Full Refresh (Delta endpoint 호환 유지)
   └─ APNs Push Outbox
                     │
                     ▼
@@ -131,9 +131,12 @@ ACTION_HUB_MOBILE_ACCESS_TOKEN_MINUTES=15
 ACTION_HUB_MOBILE_REFRESH_TOKEN_DAYS=30
 ACTION_HUB_MOBILE_REFRESH_REUSE_GRACE_SECONDS=30
 ACTION_HUB_MOBILE_PAIRING_TTL_SECONDS=300
+ACTION_HUB_ALLOW_UNSIGNED_WEBHOOKS=false
 ```
 
 APNs Live 전송은 Apple Developer Portal에서 발급한 `.p8` Provider Key가 필요합니다. 설정하지 않아도 앱은 Foreground/Background Refresh와 수동 동기화로 동작합니다. 상세 절차는 `docs/25_IOS_PAIRING_APNS_OPERATIONS_KR.md`를 참조합니다.
+
+`ACTION_HUB_ALLOW_UNSIGNED_WEBHOOKS`의 기본값은 `false`입니다. Provider signing secret 없이 webhook을 수신해야 한다면 development/test에서만 명시적으로 `true`로 설정할 수 있으며, production에서는 이 플래그와 관계없이 unsigned delivery를 거부합니다.
 
 ## Decision & Focus 흐름
 
@@ -472,6 +475,7 @@ approved → queued → executing → registered
 
 ```bash
 ./scripts/verify.sh
+make docs-check
 ```
 
 수동 명령:
@@ -484,7 +488,7 @@ node --check action_hub/web/app.js
 node --check action_hub/web/share-target.js
 ```
 
-릴리스 후보 검증 기준은 서버 `78 passed`, statement coverage `81.27%`, Swift Core `23 XCTest + 1 Smoke Test`, 실제 FastAPI–Swift 종단 간 흐름 통과입니다.
+`./scripts/verify.sh`와 `make docs-check`는 로컬 코드·문서 gate다. 통과하더라도 외부 provider credential, production host, Apple signing, Xcode build 또는 실기기 동작을 검증한 것은 아니다.
 
 현재 릴리스에서 검증한 핵심 시나리오:
 
@@ -513,7 +517,8 @@ node --check action_hub/web/share-target.js
 - Follow-up, Daily Decision, Meeting Intake, Personal Rules, Weekly ROI
 - PWA·REST·MCP·Docker·systemd·Nginx 예시
 - Mobile Gateway, QR Pairing, 기기별 Scope, 회전형 Refresh Token
-- 오프라인 Capture, Delta Sync, Revision Conflict, APNs Push Outbox
+- 오프라인 Capture, dead-letter 수동 복구/확정 삭제, Revision Conflict, APNs Push Outbox
+- iOS full refresh 경로와 서버 Delta API 호환 유지
 - SwiftUI iOS Companion 소스와 OpenAPI 계약
 - 자동 테스트와 배포 패키지
 
@@ -525,10 +530,10 @@ node --check action_hub/web/share-target.js
 - 실제 Fireflies Workspace의 V2 Webhook/GraphQL 1회 검증
 - Docker daemon과 PostgreSQL 서버에서의 실제 기동
 - Apple Developer Team 서명, Xcode Archive, TestFlight 업로드
-- 실제 iPhone의 Share Extension·App Intents·Widget·APNs 수신
+- Full Xcode 환경의 XCTest/App Target·Extension build와 실제 iPhone의 Share Extension·App Intents·Widget·APNs 수신
 - 실제 iPhone/Android 홈 화면 PWA와 공유 시트
 
-이 항목들은 사용자 계정 자격증명, Apple 서명 환경 또는 외부 인프라가 필요합니다. 릴리스 패키지에서는 dry-run·Mock·실제 FastAPI–Swift HTTP 종단 간 테스트, Swift Package 테스트와 정적 Xcode 계약 검증까지 수행합니다.
+이 항목들은 사용자 계정 자격증명, Apple 서명 환경 또는 외부 인프라가 필요합니다. 현재 iOS-XCTEST는 Full Xcode 필요 상태이며, 이 저장소의 정적 검사만으로 device/build 인수를 주장하지 않습니다.
 
 ## 문서
 

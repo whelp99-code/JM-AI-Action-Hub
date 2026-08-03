@@ -513,7 +513,7 @@ class MobileDeviceRead(BaseModel):
     push_registered: bool = False
 
     @classmethod
-    def from_device(cls, device: Any) -> "MobileDeviceRead":
+    def from_device(cls, device: Any) -> MobileDeviceRead:
         return cls(
             id=device.id,
             device_name=device.device_name,

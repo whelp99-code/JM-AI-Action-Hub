@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import httpx
 
@@ -68,7 +68,7 @@ def main() -> None:
                             "text": "내일 오전 10시 모바일 E2E 미팅, 미팅 전에 API 계약 확인",
                             "source": "mobile-http-smoke",
                             "timezone": "Asia/Seoul",
-                            "reference_time": datetime.now(timezone.utc).isoformat(),
+                            "reference_time": datetime.now(UTC).isoformat(),
                         }
                     ]
                 },

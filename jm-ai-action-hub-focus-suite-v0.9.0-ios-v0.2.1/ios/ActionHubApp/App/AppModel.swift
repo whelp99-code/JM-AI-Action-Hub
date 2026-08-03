@@ -21,6 +21,8 @@ final class AppModel: ObservableObject {
   @Published private(set) var activeFocus: FocusSession?
   @Published private(set) var focusWeeklyReport: FocusWeeklyReport?
   @Published private(set) var pendingCaptureCount = 0
+  @Published private(set) var deadLetterCaptureCount = 0
+  @Published private(set) var deadLetters: [OfflineCaptureDeadLetter] = []
   @Published var notificationPreferences = NotificationPreferences()
   @Published var isRefreshing = false
   @Published var lastError: String?
@@ -33,7 +35,7 @@ final class AppModel: ObservableObject {
 
   let biometricLock = BiometricLock()
   private let credentialStore = KeychainCredentialStore()
-  private lazy var session = MobileSession(store: credentialStore)
+  private lazy var session = MobileSession(store: credentialStore, appVersion: AppConfiguration.appVersion)
   private var appGroupStore: AppGroupStore?
   private var captureQueue: OfflineCaptureQueue?
   private let liveActivity = FocusLiveActivityManager()
@@ -144,33 +146,21 @@ final class AppModel: ObservableObject {
     isRefreshing = true
     defer { isRefreshing = false }
     do {
-      async let dashboardRequest = session.dashboard(currentAppVersion: AppConfiguration.appVersion)
-      async let reviewRequest = session.reviewPlans(limit: 50)
-      async let activityRequest = session.activity(limit: 50)
-      async let triageRequest = session.focusTriage(limit: 100)
-      async let matrixRequest = session.focusMatrix(limitPerQuadrant: 100)
-      async let big3Request = session.big3()
-      async let activeFocusRequest = session.activeFocusSession()
-      let (newDashboard, newReview, newActivity, newTriage, newMatrix, newBig3, newActiveFocus) =
-        try await (
-          dashboardRequest, reviewRequest, activityRequest, triageRequest, matrixRequest,
-          big3Request,
-          activeFocusRequest
-        )
-      dashboard = newDashboard
-      reviewPlans = newReview
-      activity = newActivity
-      triage = newTriage
-      matrix = newMatrix
-      big3 = newBig3
-      activeFocus = newActiveFocus
-      if let newActiveFocus {
-        await liveActivity.update(session: newActiveFocus)
+      let snapshot = try await session.refreshSnapshot(
+        currentAppVersion: AppConfiguration.appVersion)
+      dashboard = snapshot.dashboard
+      reviewPlans = snapshot.review
+      activity = snapshot.activity
+      triage = snapshot.triage
+      matrix = snapshot.matrix
+      big3 = snapshot.big3
+      activeFocus = snapshot.activeFocus
+      if let activeFocus = snapshot.activeFocus {
+        await liveActivity.update(session: activeFocus)
       } else {
         await liveActivity.end()
       }
-      try appGroupStore?.writeWidgetSnapshot(WidgetSnapshot(dashboard: newDashboard))
-      try await synchronizeChanges()
+      try appGroupStore?.writeWidgetSnapshot(WidgetSnapshot(dashboard: snapshot.dashboard))
       lastError = nil
     } catch {
       handle(error)
@@ -217,6 +207,79 @@ final class AppModel: ObservableObject {
       lastError = error.localizedDescription
       await updatePendingCount()
     }
+  }
+
+  func refreshDeadLetters() async {
+    guard let captureQueue else {
+      deadLetterCaptureCount = 0
+      deadLetters = []
+      return
+    }
+    do {
+      deadLetters = try await captureQueue.deadLetters(limit: 100)
+      deadLetterCaptureCount = try await captureQueue.deadLetterCount()
+    } catch {
+      lastError = error.localizedDescription
+    }
+  }
+
+  func restoreAllDeadLetters() async {
+    guard let captureQueue else {
+      lastError = "App Group 오프라인 큐를 사용할 수 없습니다."
+      return
+    }
+    do {
+      var previousCount = try await captureQueue.deadLetterCount()
+      while previousCount > 0 {
+        let page = try await captureQueue.deadLetters(limit: 100)
+        guard !page.isEmpty else {
+          throw ActionHubAPIError.encoding("dead-letter 목록을 다시 읽을 수 없습니다")
+        }
+        for deadLetter in page {
+          try await captureQueue.restoreDeadLetter(clientCaptureId: deadLetter.id)
+        }
+        let currentCount = try await captureQueue.deadLetterCount()
+        guard currentCount < previousCount else {
+          throw ActionHubAPIError.encoding("dead-letter 복원이 진행되지 않았습니다")
+        }
+        previousCount = currentCount
+      }
+      lastError = nil
+    } catch {
+      lastError = error.localizedDescription
+    }
+    await updatePendingCount()
+    await refreshDeadLetters()
+  }
+
+  func purgeAllDeadLetters(confirmed: Bool) async {
+    guard confirmed else { return }
+    guard let captureQueue else {
+      lastError = "App Group 오프라인 큐를 사용할 수 없습니다."
+      return
+    }
+    do {
+      var previousCount = try await captureQueue.deadLetterCount()
+      while previousCount > 0 {
+        let page = try await captureQueue.deadLetters(limit: 100)
+        guard !page.isEmpty else {
+          throw ActionHubAPIError.encoding("dead-letter 목록을 다시 읽을 수 없습니다")
+        }
+        for deadLetter in page {
+          try await captureQueue.purgeDeadLetter(clientCaptureId: deadLetter.id)
+        }
+        let currentCount = try await captureQueue.deadLetterCount()
+        guard currentCount < previousCount else {
+          throw ActionHubAPIError.encoding("dead-letter 삭제가 진행되지 않았습니다")
+        }
+        previousCount = currentCount
+      }
+      lastError = nil
+    } catch {
+      lastError = error.localizedDescription
+    }
+    await updatePendingCount()
+    await refreshDeadLetters()
   }
 
   func loadPlan(_ id: String) async throws -> ActionPlan {
@@ -426,20 +489,6 @@ final class AppModel: ObservableObject {
     }
   }
 
-  private func synchronizeChanges() async throws {
-    var cursor = appGroupStore?.readSyncCursor()
-    var pageCount = 0
-    repeat {
-      let response = try await session.changes(cursor: cursor, limit: 200)
-      cursor = response.nextCursor
-      try appGroupStore?.writeSyncCursor(cursor)
-      pageCount += 1
-      if !response.hasMore { break }
-      // Bound a single foreground refresh so a very old device cannot monopolize the UI.
-      // The next refresh resumes from the durable cursor.
-    } while pageCount < 10
-  }
-
   private func replacePlan(_ plan: ActionPlan) {
     if let index = reviewPlans.firstIndex(where: { $0.id == plan.id }) {
       reviewPlans[index] = plan
@@ -451,9 +500,13 @@ final class AppModel: ObservableObject {
   private func updatePendingCount() async {
     guard let captureQueue else {
       pendingCaptureCount = 0
+      deadLetterCaptureCount = 0
+      deadLetters = []
       return
     }
     pendingCaptureCount = (try? await captureQueue.count()) ?? 0
+    deadLetterCaptureCount = (try? await captureQueue.deadLetterCount()) ?? 0
+    deadLetters = (try? await captureQueue.deadLetters(limit: 100)) ?? []
   }
 
   private func handle(_ error: Error) {

@@ -3,7 +3,46 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+
+from fastapi.testclient import TestClient
+
+from action_hub.config import Settings
+from action_hub.main import create_app
+from action_hub.models import (
+    ActionType,
+    AttentionState,
+    Destination,
+    ExecutorType,
+    FocusSessionState,
+    ItemState,
+    PlanStatus,
+    Quadrant,
+    TrafficState,
+)
+
+TEST_API_KEY = "test-api-key-" + ("x" * 32)
+
+
+def test_string_enums_preserve_legacy_string_and_value_contracts():
+    members = (
+        PlanStatus.DRAFT,
+        ItemState.DRAFT,
+        ActionType.EVENT,
+        Destination.TODOIST,
+        ExecutorType.HUMAN,
+        AttentionState.UNTRIAGED,
+        Quadrant.Q1,
+        FocusSessionState.RUNNING,
+        TrafficState.GREEN,
+    )
+
+    for member in members:
+        assert isinstance(member, str)
+        assert str(member) == f"{type(member).__name__}.{member.name}"
+        assert member.value == member.lower()
+        assert json.dumps(member) == json.dumps(member.value)
+        assert repr(member) == f"<{type(member).__name__}.{member.name}: {member.value!r}>"
 
 
 def _create(client, text: str):
@@ -50,7 +89,7 @@ def test_ai_worker_dispatch_uses_existing_github_action_layer(client):
 def test_followup_lifecycle_and_due_processing(client):
     plan = _create(client, "협력사 회신 확인")
     item = plan["items"][0]
-    past = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
+    past = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
     created = client.post(
         f"/api/v1/items/{item['id']}/followups",
         json={"waiting_for": "협력사", "channel": "email", "follow_up_at": past},
@@ -119,13 +158,10 @@ def test_active_personal_rule_applies_only_safe_metadata(client):
 
 
 def test_fireflies_v2_webhook_creates_review_plan(tmp_path):
-    from fastapi.testclient import TestClient
-    from action_hub.config import Settings
-    from action_hub.main import create_app
-
     secret = "fireflies-secret"
     settings = Settings(
         app_env="test",
+        api_key=TEST_API_KEY,
         database_url=f"sqlite+pysqlite:///{tmp_path / 'fireflies.db'}",
         data_dir=tmp_path,
         fireflies_webhook_secret=secret,
@@ -146,6 +182,7 @@ def test_fireflies_v2_webhook_creates_review_plan(tmp_path):
     body = json.dumps(payload, separators=(",", ":")).encode()
     signature = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     with TestClient(create_app(settings)) as client:
+        client.headers["X-Action-Hub-Key"] = settings.api_key
         response = client.post(
             "/api/v1/webhooks/fireflies",
             content=body,

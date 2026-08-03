@@ -5,6 +5,7 @@ struct SettingsView: View {
   @EnvironmentObject private var model: AppModel
   @EnvironmentObject private var lock: BiometricLock
   @State private var showDisconnect = false
+  @State private var showPurgeDeadLetters = false
 
   var body: some View {
     Form {
@@ -27,6 +28,29 @@ struct SettingsView: View {
             await model.refreshAll()
           }
         }
+      }
+
+      Section("오프라인 수집 진단") {
+        LabeledContent("Dead Letter", value: "\(model.deadLetterCaptureCount)건")
+        if model.deadLetters.isEmpty {
+          Text("복구 또는 삭제가 필요한 실패 수집이 없습니다.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        } else {
+          ForEach(model.deadLetters) { deadLetter in
+            VStack(alignment: .leading, spacing: 2) {
+              Text(deadLetter.record.capture.text).lineLimit(1)
+              Text("재시도 \(deadLetter.record.attemptCount)회 · \(deadLetter.record.lastError ?? "서버 오류")")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            }
+          }
+        }
+        Button("모두 복원") { Task { await model.restoreAllDeadLetters() } }
+          .disabled(model.deadLetterCaptureCount == 0)
+        Button("모두 삭제", role: .destructive) { showPurgeDeadLetters = true }
+          .disabled(model.deadLetterCaptureCount == 0)
       }
 
       Section("보안") {
@@ -67,6 +91,15 @@ struct SettingsView: View {
     .confirmationDialog("서버에서도 이 기기의 Refresh Token을 폐기합니다.", isPresented: $showDisconnect) {
       Button("연결 해제", role: .destructive) { Task { await model.disconnect() } }
     }
+    .alert("Dead Letter 모두 삭제", isPresented: $showPurgeDeadLetters) {
+      Button("모두 삭제", role: .destructive) {
+        Task { await model.purgeAllDeadLetters(confirmed: true) }
+      }
+      Button("취소", role: .cancel) {}
+    } message: {
+      Text("\(model.deadLetterCaptureCount)건을 삭제하면 복구 불가합니다.")
+    }
+    .task { await model.refreshDeadLetters() }
   }
 }
 

@@ -11,7 +11,6 @@ from .audit import record_audit
 from .push import queue_push_for_active_devices
 from .state_sync import recalculate_plan_status
 
-
 ACTIVE_FOLLOWUP_STATES = {"waiting", "follow_up_due", "followed_up"}
 
 

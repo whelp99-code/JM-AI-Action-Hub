@@ -3,11 +3,13 @@ from __future__ import annotations
 from datetime import timedelta
 
 from fastapi.testclient import TestClient
-from sqlalchemy import inspect, select
+from sqlalchemy import delete, event, func, insert, inspect, select
 
 from action_hub.models import (
     ActionItem,
     AttentionState,
+    AuditEvent,
+    CarryOverDecision,
     DailyFocusPlan,
     FocusSession,
     FollowUp,
@@ -16,6 +18,7 @@ from action_hub.models import (
     PriorityAssessment,
     utcnow,
 )
+from action_hub.services.focus import matrix
 
 
 def _plan(client: TestClient, text: str | None = None) -> dict:
@@ -123,6 +126,80 @@ def test_triage_suggestion_classification_revision_and_q4_safety(client: TestCli
         assert stored.state == ItemState.DRAFT.value
         assert stored.attention_state == AttentionState.CLASSIFIED.value
         assert db.scalar(select(PriorityAssessment).where(PriorityAssessment.action_item_id == stored.id)) is not None
+
+
+def test_matrix_uses_bounded_quadrant_queries_with_exact_aggregate_counts(
+    client: TestClient, settings
+) -> None:
+    plan_id = _plan(client, "Matrix stress fixture")["id"]
+    quadrants = ("q1", "q2", "q3", "q4")
+    classified_per_quadrant = 2_400
+    untriaged_without_assessment = 200
+    untriaged_with_assessment = 200
+
+    with client.app.state.database.session_factory() as db:
+        db.execute(delete(ActionItem).where(ActionItem.plan_id == plan_id))
+        action_rows = []
+        assessment_rows = []
+        for index in range(classified_per_quadrant * len(quadrants) + untriaged_without_assessment + untriaged_with_assessment):
+            item_id = f"matrix-{index:05d}"
+            is_classified = index < classified_per_quadrant * len(quadrants)
+            has_assessment = is_classified or index >= classified_per_quadrant * len(quadrants) + untriaged_without_assessment
+            attention_state = AttentionState.CLASSIFIED.value if is_classified else AttentionState.UNTRIAGED.value
+            action_rows.append(
+                {
+                    "id": item_id,
+                    "plan_id": plan_id,
+                    "item_type": "todo",
+                    "destination": "none",
+                    "title": f"Matrix item {index}",
+                    "fingerprint": f"matrix-fingerprint-{index}",
+                    "attention_state": attention_state,
+                }
+            )
+            if has_assessment:
+                quadrant = quadrants[index // classified_per_quadrant] if is_classified else "q1"
+                assessment_rows.append(
+                    {
+                        "id": f"assessment-{index:05d}",
+                        "action_item_id": item_id,
+                        "quadrant": quadrant,
+                    }
+                )
+        db.execute(insert(ActionItem), action_rows)
+        db.execute(insert(PriorityAssessment), assessment_rows)
+        db.commit()
+
+    select_count = 0
+    action_item_load_count = 0
+    statements: list[str] = []
+
+    def count_select(_conn, _cursor, statement, _parameters, _context, _executemany) -> None:
+        nonlocal select_count
+        if statement.lstrip().upper().startswith("SELECT"):
+            select_count += 1
+            statements.append(statement)
+
+    def count_action_item_load(_target, _context) -> None:
+        nonlocal action_item_load_count
+        action_item_load_count += 1
+
+    engine = client.app.state.database.engine
+    event.listen(engine, "before_cursor_execute", count_select)
+    event.listen(ActionItem, "load", count_action_item_load)
+    try:
+        with client.app.state.database.session_factory() as db:
+            response = matrix(db, settings, limit_per_quadrant=3)
+    finally:
+        event.remove(engine, "before_cursor_execute", count_select)
+        event.remove(ActionItem, "load", count_action_item_load)
+
+    assert response.counts == {quadrant: classified_per_quadrant for quadrant in quadrants}
+    assert response.untriaged_count == untriaged_without_assessment + untriaged_with_assessment
+    assert all(len(getattr(response, quadrant)) == 3 for quadrant in quadrants)
+    assert select_count <= 6
+    assert action_item_load_count <= 4 * 3
+    assert sum("LIMIT" in statement.upper() for statement in statements) == 4
 
 
 def test_dual_big3_capacity_persists_and_releases_previous_attention(client: TestClient) -> None:
@@ -278,7 +355,7 @@ def test_focus_lifecycle_traffic_single_active_and_completion(client: TestClient
         assert item.completion_evidence == "보고 완료"
 
 
-def test_day_close_decisions_are_explicit_and_followup_is_idempotent(client: TestClient) -> None:
+def test_close_day_decisions_are_explicit_and_followup_is_idempotent(client: TestClient) -> None:
     plan = _plan(
         client,
         "A 자료 정리\nB 구현 분할 repo:owner/repo\nC 조사 위임\nD 계약 검토\nE 회신 확인\nF 불필요 업무",
@@ -332,6 +409,96 @@ def test_day_close_decisions_are_explicit_and_followup_is_idempotent(client: Tes
     with client.app.state.database.session_factory() as db:
         assert len(list(db.scalars(select(FollowUp).where(FollowUp.action_item_id == ids[4])))) == 1
 
+
+def test_close_day_preflight_missing_item_leaves_all_domain_and_audit_rows_unchanged(client: TestClient) -> None:
+    plan = _plan(client, "Atomic first\nAtomic missing")
+    first_id = plan["items"][0]["id"]
+    with client.app.state.database.session_factory() as db:
+        original = db.get(ActionItem, first_id)
+        original_due_at = original.due_at
+        initial_reschedule_count = original.reschedule_count
+        initial_micro_steps = db.scalar(select(func.count()).select_from(MicroStep))
+        initial_followups = db.scalar(select(func.count()).select_from(FollowUp))
+        initial_decisions = db.scalar(select(func.count()).select_from(CarryOverDecision))
+        initial_audits = db.scalar(select(func.count()).select_from(AuditEvent))
+
+    response = client.post(
+        "/api/v1/focus/day-close",
+        json={
+            "decisions": [
+                {"action_item_id": first_id, "decision": "reschedule"},
+                {"action_item_id": "missing-action-item", "decision": "cancel"},
+            ]
+        },
+    )
+
+    assert response.status_code == 404, response.text
+    assert response.json() == {
+        "detail": {"code": "action_item_not_found", "action_item_id": "missing-action-item"}
+    }
+    with client.app.state.database.session_factory() as db:
+        assert db.get(ActionItem, first_id).due_at == original_due_at
+        assert db.get(ActionItem, first_id).reschedule_count == initial_reschedule_count
+        assert db.scalar(select(func.count()).select_from(MicroStep)) == initial_micro_steps
+        assert db.scalar(select(func.count()).select_from(FollowUp)) == initial_followups
+        assert db.scalar(select(func.count()).select_from(CarryOverDecision)) == initial_decisions
+        assert db.scalar(select(func.count()).select_from(AuditEvent)) == initial_audits
+
+
+def test_close_day_rejects_duplicate_ids_and_invalid_decision_fields_before_service(client: TestClient) -> None:
+    item_id = _plan(client, "Schema target")["items"][0]["id"]
+    tomorrow = (utcnow().date() + timedelta(days=1)).isoformat()
+    invalid_payloads = [
+        {
+            "decisions": [
+                {"action_item_id": item_id, "decision": "cancel"},
+                {"action_item_id": item_id, "decision": "cancel"},
+            ]
+        },
+        {"decisions": [{"action_item_id": item_id, "decision": "deadline_change"}]},
+        {
+            "decisions": [
+                {
+                    "action_item_id": item_id,
+                    "decision": "waiting",
+                    "waiting_for": "   ",
+                    "follow_up_at": "2030-01-02T10:00:00",
+                }
+            ]
+        },
+        {
+            "decisions": [
+                {
+                    "action_item_id": item_id,
+                    "decision": "waiting",
+                    "waiting_for": "External owner",
+                    "follow_up_at": "2030-01-02T10:00:00",
+                }
+            ]
+        },
+        {"decisions": [{"action_item_id": item_id, "decision": "reschedule", "executor": "ai"}]},
+        {"decisions": [{"action_item_id": item_id, "decision": "split", "to_date": tomorrow}]},
+        {"decisions": [{"action_item_id": item_id, "decision": "delegate", "to_date": tomorrow}]},
+        {
+            "decisions": [
+                {"action_item_id": item_id, "decision": "deadline_change", "to_date": tomorrow, "waiting_for": "x"}
+            ]
+        },
+        {"decisions": [{"action_item_id": item_id, "decision": "cancel", "executor": "ai"}]},
+        {"decisions": [{"action_item_id": item_id, "decision": "waiting", "executor": "ai"}]},
+    ]
+    with client.app.state.database.session_factory() as db:
+        initial_decisions = db.scalar(select(func.count()).select_from(CarryOverDecision))
+        initial_audits = db.scalar(select(func.count()).select_from(AuditEvent))
+    for payload in invalid_payloads:
+        response = client.post("/api/v1/focus/day-close", json=payload)
+        assert response.status_code == 422, response.text
+    duplicate_response = client.post("/api/v1/focus/day-close", json=invalid_payloads[0])
+    assert "duplicate action_item_id" in duplicate_response.text
+    with client.app.state.database.session_factory() as db:
+        assert db.get(ActionItem, item_id).state != ItemState.CANCELLED.value
+        assert db.scalar(select(func.count()).select_from(CarryOverDecision)) == initial_decisions
+        assert db.scalar(select(func.count()).select_from(AuditEvent)) == initial_audits
 
 def test_weekly_focus_report_and_dashboard_summary(client: TestClient) -> None:
     plan = _plan(client, "전략 문서 작성 60분 #strategy\n자동화 테스트 30분 repo:owner/repo")

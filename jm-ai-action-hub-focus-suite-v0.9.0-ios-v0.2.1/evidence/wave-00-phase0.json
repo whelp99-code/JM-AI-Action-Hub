@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "wave": "00",
+  "completedAt": "2026-08-02T16:55:01Z",
+  "repositoryHead": "9c8f28d5a9eb34a2c30a869be620885023171977",
+  "deliveryState": "UNCOMMITTED_WORKTREE",
+  "authorizedCards": [
+    "CARD-00-01",
+    "CARD-00-02",
+    "CARD-00-03"
+  ],
+  "cardVerification": {
+    "CARD-00-01": {
+      "focusedCommand": "cd server && PYTHONPATH=. .venv/bin/python -m pytest -q tests/test_security.py",
+      "focusedExitCode": 0,
+      "focusedFinalSummary": "11 passed",
+      "fullCommand": "cd server && PYTHONPATH=. .venv/bin/python -m pytest -q",
+      "fullExitCode": 0,
+      "fullFinalSummary": "101 passed"
+    },
+    "CARD-00-02": {
+      "focusedCommand": "cd server && PYTHONPATH=. .venv/bin/python -m pytest -q tests/test_control_loop.py tests/test_hardening.py -k webhook",
+      "focusedExitCode": 0,
+      "focusedFinalSummary": "5 passed",
+      "fullCommand": "cd server && PYTHONPATH=. .venv/bin/python -m pytest -q",
+      "fullExitCode": 0,
+      "fullFinalSummary": "101 passed"
+    },
+    "CARD-00-03": {
+      "focusedCommand": "cd server && PYTHONPATH=. .venv/bin/python -m pytest -q tests/test_mobile.py -k 'secret or token or pairing or refresh'",
+      "focusedExitCode": 0,
+      "focusedFinalSummary": "19 passed",
+      "fullCommand": "cd server && PYTHONPATH=. .venv/bin/python -m pytest -q",
+      "fullExitCode": 0,
+      "fullFinalSummary": "101 passed"
+    }
+  },
+  "additionalVerification": [
+    {
+      "command": "cd server && git diff --check -- server Phase 0 files",
+      "exitCode": 0,
+      "summary": "no whitespace errors"
+    },
+    {
+      "command": "cd server && bash -n scripts/smoke_test.sh",
+      "exitCode": 0,
+      "summary": "shell syntax valid"
+    },
+    {
+      "command": "cd server && env -u ACTION_HUB_API_KEY bash scripts/smoke_test.sh",
+      "exitCode": 64,
+      "expectedExitCode": 64,
+      "summary": "fails before network access with ACTION_HUB_API_KEY required message"
+    },
+    {
+      "command": "Settings and HKDF contract probe",
+      "exitCode": 0,
+      "summary": "default host 127.0.0.1, unsigned flag false, required HKDF vector matched"
+    },
+    {
+      "command": "plan-review machine-check.sh docs/IMPROVEMENT_PLAN_V1.md",
+      "exitCode": 0,
+      "summary": "vague=0 incomplete=0 pending=0"
+    }
+  ],
+  "independentReview": {
+    "modelRole": "fresh gpt-5.6-sol security diff reviewer",
+    "initial": {
+      "critical": 0,
+      "high": 0,
+      "medium": 2,
+      "low": 2
+    },
+    "correctionsApplied": true,
+    "final": {
+      "critical": 0,
+      "high": 0,
+      "medium": 0
+    },
+    "residualRisk": "No live network, external webhook provider, or production deployment acceptance was run."
+  },
+  "changedFiles": [
+    "server/.env.example",
+    "server/Makefile",
+    "server/action_hub/api/mobile.py",
+    "server/action_hub/config.py",
+    "server/action_hub/security.py",
+    "server/action_hub/services/mobile_auth.py",
+    "server/action_hub/services/webhooks.py",
+    "server/docs/04_DATA_AND_API_KR.md",
+    "server/docs/27_MOBILE_SECURITY_OPERATIONS_KR.md",
+    "server/scripts/smoke_test.sh",
+    "server/tests/conftest.py",
+    "server/tests/test_control_loop.py",
+    "server/tests/test_features.py",
+    "server/tests/test_hardening.py",
+    "server/tests/test_mobile.py",
+    "server/tests/test_security.py"
+  ],
+  "prohibitedActionsObserved": {
+    "commit": false,
+    "push": false,
+    "pullRequest": false,
+    "merge": false,
+    "iosDeviceSigning": false,
+    "externalProductionChange": false
+  }
+}

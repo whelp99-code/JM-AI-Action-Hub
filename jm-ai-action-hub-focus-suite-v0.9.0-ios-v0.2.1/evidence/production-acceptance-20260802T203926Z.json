@@ -1,0 +1,62 @@
+{
+  "blockers": [
+    {
+      "code": "LIVE_ACCEPTANCE_PENDING",
+      "message": "LIVE-ACCEPTANCE PENDING (\uc0ac\uc6a9\uc790 \uc778\ud504\ub77c \ud544\uc694)"
+    }
+  ],
+  "criteria": {
+    "1": {
+      "command": "make acceptance-security",
+      "evidence": "loopback auth and signed-webhook boundary",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutSha256": "ea87571617a53d7455e9346b354afaa22942e0fed4ed4f15c3ed034afefc9fbc"
+    },
+    "2": {
+      "command": "deterministic source archive install/check",
+      "evidence": "two-build SHA, verifier, isolated install/check",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutSha256": "d8608dba0c76adbf1c57f14907a898772863552dfd74be47e27e785881100711"
+    },
+    "3": {
+      "command": "make acceptance-smoke",
+      "evidence": "loopback synthetic capture, bounded matrix, 404 mixed close-day with item state and decision/audit counts unchanged",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutSha256": "ab338ddbbf22d5d63e12db1188280bcd8c09f0487c6cbd6e1d1fe3ca2492b412"
+    },
+    "4": {
+      "command": "make rehearse-backup-restore",
+      "evidence": "isolated deterministic restore rehearsal",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutSha256": "d8aa47e7aaf138a4bed73f935ddb998eec5087f80b526ceee3c58a99692ad4f4"
+    },
+    "5": {
+      "command": "make docs-check",
+      "evidence": "documentation validation and shell syntax",
+      "exitCode": 0,
+      "status": "PASS",
+      "stdoutSha256": "2cdf2bc7f71bcf3742b5bde64bb951a391e4142e4c2dc01f57498ac04ca1efe0"
+    }
+  },
+  "externalStatus": "LOCAL_PASS_EXTERNAL_PENDING",
+  "finishedAt": "2026-08-02T23:44:01.009344+00:00",
+  "planSha256": "45d329c26e6902f74f6d9d5838d21d4fb6ca6b12367d71cbaa2b0f55f774a510",
+  "redactions": [
+    {
+      "field": "auth headers",
+      "method": "not serialized"
+    },
+    {
+      "field": "capture text",
+      "method": "synthetic and not serialized"
+    }
+  ],
+  "repoHead": "9c8f28d5a9eb34a2c30a869be620885023171977",
+  "schemaVersion": 1,
+  "startedAt": "2026-08-02T23:43:41Z",
+  "tempRoot": "/var/folders/f0/tbqwy3mn7rj7vy2j7ts0gxhr0000gn/T/tmp.ihIexlZxUV"
+}

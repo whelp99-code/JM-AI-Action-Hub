@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "wave": "01",
+  "recordedAt": "2026-08-02T18:53:30Z",
+  "repositoryHead": "9c8f28d5a9eb34a2c30a869be620885023171977",
+  "deliveryState": "UNCOMMITTED_WORKTREE",
+  "masterDecision": "CONDITIONAL_COMPLETE",
+  "localVerdict": "LOCAL_PASS",
+  "cardStatus": {
+    "CARD-01-01": "DONE",
+    "CARD-01-02": "CODE_IMPLEMENTED_LOCAL_PASS",
+    "CARD-01-03": "CODE_IMPLEMENTED_LOCAL_PASS",
+    "CARD-01-04": "DONE"
+  },
+  "preservedFindingState": {
+    "solHighDlqCollision": "CLOSED",
+    "lunaMaxCritical": 0,
+    "lunaMaxHigh": 0,
+    "lunaMaxMedium": 0,
+    "lunaMaxLow": 0
+  },
+  "serverVerification": {
+    "fullPytestExitCode": 0,
+    "fullPytestCount": 108
+  },
+  "deferredVerification": [
+    {
+      "state": "iOS-XCTEST PENDING (Full Xcode 필요)",
+      "command": "cd ios && swift test --package-path Packages/ActionHubCore --filter OfflineCaptureQueueTests",
+      "priorRawExitCode": 1,
+      "priorReason": "no such module XCTest; zero tests executed"
+    },
+    {
+      "state": "iOS-XCTEST PENDING (Full Xcode 필요)",
+      "command": "cd ios && swift test --package-path Packages/ActionHubCore --filter MobileRefreshSnapshotTests",
+      "priorRawExitCode": 1,
+      "priorReason": "no such module XCTest; zero tests executed"
+    }
+  ],
+  "traceability": "CARD-02-04 guard: early-applied in Wave 01, remainder assigned to Phase 2",
+  "historicalEvidence": [
+    "evidence/wave-01-revision-report.md",
+    "evidence/lunamax-wave01-final-review.md",
+    "evidence/wave-01-final-blocked.json"
+  ],
+  "prohibitedActionsObserved": {
+    "commit": false,
+    "stage": false,
+    "push": false,
+    "pullRequest": false,
+    "merge": false,
+    "iosDeviceSigning": false,
+    "deployment": false
+  }
+}

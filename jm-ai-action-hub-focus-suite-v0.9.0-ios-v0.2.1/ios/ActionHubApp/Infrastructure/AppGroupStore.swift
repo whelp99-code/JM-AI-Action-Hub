@@ -17,7 +17,6 @@ struct AppGroupStore {
 
   var captureQueueURL: URL { containerURL.appendingPathComponent("captures/pending.json") }
   var widgetSnapshotURL: URL { containerURL.appendingPathComponent("widget/dashboard.json") }
-  var syncCursorURL: URL { containerURL.appendingPathComponent("sync/cursor.txt") }
   var pendingRouteURL: URL { containerURL.appendingPathComponent("navigation/pending-route.txt") }
 
   func writeWidgetSnapshot(_ snapshot: WidgetSnapshot) throws {
@@ -49,23 +48,6 @@ struct AppGroupStore {
     return value
   }
 
-  func readSyncCursor() -> String? {
-    try? String(contentsOf: syncCursorURL, encoding: .utf8).trimmingCharacters(
-      in: .whitespacesAndNewlines)
-  }
-
-  func writeSyncCursor(_ cursor: String?) throws {
-    try FileManager.default.createDirectory(
-      at: syncCursorURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-    if let cursor {
-      try Data(cursor.utf8).write(
-        to: syncCursorURL,
-        options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
-      )
-    } else {
-      try? FileManager.default.removeItem(at: syncCursorURL)
-    }
-  }
 }
 
 enum AppGroupError: LocalizedError {

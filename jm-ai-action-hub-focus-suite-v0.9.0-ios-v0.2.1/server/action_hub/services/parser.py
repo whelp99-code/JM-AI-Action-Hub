@@ -16,7 +16,6 @@ from ..models import ActionType, Destination, ExecutorType
 from ..schemas import ActionItemDraft
 from .date_parser import parse_temporal
 
-
 EVENT_KEYWORDS = {
     "회의", "미팅", "면담", "약속", "예약", "교육", "세미나", "행사", "출장",
     "방문", "인터뷰", "통화", "콜", "meeting", "appointment", "interview", "webinar",

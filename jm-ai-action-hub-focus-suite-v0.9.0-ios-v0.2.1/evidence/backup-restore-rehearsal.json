@@ -1,0 +1,27 @@
+{
+  "archiveSha256": "5ad699da8c6d588c027b479772a843f2050f56d0c341b8f1f79d1b0c89b4c513",
+  "commandContracts": [
+    {
+      "command": "action-hub migrate (temporary SQLite)",
+      "exitCode": 0,
+      "name": "migrate"
+    },
+    {
+      "command": "backup.sh --source-data <temp>/data --output <temp>/backup.tar.gz",
+      "exitCode": 0,
+      "name": "backup"
+    },
+    {
+      "command": "restore.sh --archive <temp>/backup.tar.gz --target-data <temp>/data",
+      "exitCode": 0,
+      "name": "restore"
+    }
+  ],
+  "manifestsEqual": true,
+  "marker": "restored",
+  "postRestoreManifestSha256": "a737f73e0a2acb01a6dcaa5dd088159f35dee5b798e2676fffe25936deb700da",
+  "preBackupManifestSha256": "a737f73e0a2acb01a6dcaa5dd088159f35dee5b798e2676fffe25936deb700da",
+  "schema": "0005_decision_focus_foundation",
+  "schemaVersion": 1,
+  "tempPath": "/var/folders/f0/tbqwy3mn7rj7vy2j7ts0gxhr0000gn/T/tmp.hsoZLv0ZqV"
+}

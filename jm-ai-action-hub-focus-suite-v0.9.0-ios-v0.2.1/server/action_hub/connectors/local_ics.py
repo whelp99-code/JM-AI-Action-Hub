@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 import re
-from datetime import timedelta, timezone
+from datetime import UTC, timedelta
 from pathlib import Path
 
 from ..config import Settings
@@ -15,7 +15,7 @@ def _escape(value: str) -> str:
 
 
 def _stamp(value) -> str:
-    return value.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return value.astimezone(UTC).strftime("%Y%m%dT%H%M%SZ")
 
 
 def build_ics(item: ActionItem, timezone_name: str) -> str:

@@ -13,7 +13,6 @@ from .outbox import enqueue_registration, process_outbox_batch
 from .planner import get_plan
 from .state_sync import recalculate_plan_status
 
-
 TERMINAL_ITEM_STATES = {
     ItemState.COMPLETED.value,
     ItemState.REJECTED.value,

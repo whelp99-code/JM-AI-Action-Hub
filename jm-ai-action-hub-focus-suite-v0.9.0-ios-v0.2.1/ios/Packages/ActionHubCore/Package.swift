@@ -10,10 +10,12 @@ let package = Package(
   products: [
     .library(name: "ActionHubCore", targets: ["ActionHubCore"]),
     .executable(name: "action-hub-mobile-smoke", targets: ["ActionHubMobileSmoke"]),
+    .executable(name: "offline-capture-queue-probe", targets: ["OfflineCaptureQueueProbe"]),
   ],
   targets: [
     .target(name: "ActionHubCore"),
     .executableTarget(name: "ActionHubMobileSmoke", dependencies: ["ActionHubCore"]),
+    .executableTarget(name: "OfflineCaptureQueueProbe", dependencies: ["ActionHubCore"]),
     .testTarget(name: "ActionHubCoreTests", dependencies: ["ActionHubCore"]),
   ]
 )

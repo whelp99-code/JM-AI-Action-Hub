@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -135,7 +135,7 @@ class TodoistConnector:
                 response.raise_for_status()
 
             # A completed Todoist task may no longer be returned by the active task endpoint.
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             params = {
                 "since": (now - timedelta(days=89)).isoformat().replace("+00:00", "Z"),
                 "until": (now + timedelta(days=1)).isoformat().replace("+00:00", "Z"),

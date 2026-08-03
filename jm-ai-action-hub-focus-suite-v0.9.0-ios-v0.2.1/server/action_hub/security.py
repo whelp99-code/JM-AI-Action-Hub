@@ -6,8 +6,7 @@ from collections.abc import Callable
 from fastapi import HTTPException, Request, Security, status
 from fastapi.security import APIKeyHeader, HTTPAuthorizationCredentials, HTTPBearer
 
-from .services.mobile_auth import MobileAuthError, MobilePrincipal, authenticate_mobile
-
+from .services.mobile_auth import MobileAuthError, MobilePrincipal, authenticate_mobile, mobile_signing_secret
 
 ADMIN_API_KEY = APIKeyHeader(
     name="X-Action-Hub-Key",
@@ -27,15 +26,15 @@ async def require_api_key(
     x_action_hub_key: str | None = Security(ADMIN_API_KEY),
 ) -> None:
     settings = request.app.state.settings
-    configured = settings.api_key
-    if settings.app_env == "production" and not settings.api_key_is_secure:
+    configured = settings.api_key or ""
+    if not settings.api_key_is_secure:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Production API key must be a non-placeholder value of at least 32 characters",
+            detail="API key is not configured securely",
         )
-    if not configured:
-        return
-    if not x_action_hub_key or not hmac.compare_digest(configured, x_action_hub_key):
+    if not x_action_hub_key or not hmac.compare_digest(
+        configured.encode("utf-8"), x_action_hub_key.encode("utf-8")
+    ):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
 
@@ -47,11 +46,15 @@ def require_mobile_scope(scope: str) -> Callable[..., MobilePrincipal]:
         settings = request.app.state.settings
         if not settings.mobile_enabled:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Mobile API disabled")
-        if settings.app_env == "production" and not settings.mobile_token_secret_is_secure:
+        try:
+            mobile_signing_secret(settings)
+        except MobileAuthError as exc:
+            if exc.code not in {"mobile_auth_not_configured", "mobile_secret_reuses_admin_key"}:
+                raise
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Mobile authentication is not production-ready",
-            )
+                detail=str(exc),
+            ) from exc
         if credentials is None or credentials.scheme.lower() != "bearer":
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
@@ -63,7 +66,11 @@ def require_mobile_scope(scope: str) -> Callable[..., MobilePrincipal]:
             with request.app.state.database.session_factory() as db:
                 principal = authenticate_mobile(db, token, settings)
         except MobileAuthError as exc:
-            code = status.HTTP_503_SERVICE_UNAVAILABLE if exc.code == "mobile_auth_not_configured" else status.HTTP_401_UNAUTHORIZED
+            code = (
+                status.HTTP_503_SERVICE_UNAVAILABLE
+                if exc.code in {"mobile_auth_not_configured", "mobile_secret_reuses_admin_key"}
+                else status.HTTP_401_UNAUTHORIZED
+            )
             raise HTTPException(
                 status_code=code,
                 detail=str(exc),

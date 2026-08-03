@@ -5,8 +5,7 @@ import hashlib
 import hmac
 import json
 import re
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, desc, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -205,7 +204,7 @@ def build_mobile_dashboard(
 
 def _encode_cursor(timestamp: datetime, audit_id: str, settings: Settings) -> str:
     payload = json.dumps(
-        {"ts": timestamp.astimezone(timezone.utc).isoformat(), "id": audit_id},
+        {"ts": timestamp.astimezone(UTC).isoformat(), "id": audit_id},
         separators=(",", ":"),
     ).encode("utf-8")
     segment = base64.urlsafe_b64encode(payload).rstrip(b"=").decode("ascii")
@@ -240,8 +239,8 @@ def _decode_cursor(cursor: str, settings: Settings) -> tuple[datetime, str]:
         if not audit_id or len(audit_id) > 128:
             raise ValueError("invalid cursor audit id")
         if timestamp.tzinfo is None:
-            timestamp = timestamp.replace(tzinfo=timezone.utc)
-        return timestamp.astimezone(timezone.utc), audit_id
+            timestamp = timestamp.replace(tzinfo=UTC)
+        return timestamp.astimezone(UTC), audit_id
     except Exception as exc:
         raise ValueError("Invalid mobile changes cursor") from exc
 

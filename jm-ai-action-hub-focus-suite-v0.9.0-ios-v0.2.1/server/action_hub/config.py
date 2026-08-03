@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import hmac
 import json
+import unicodedata
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Literal
@@ -26,7 +28,7 @@ class Settings(BaseSettings):
     app_name: str = "JM-AI Action Hub"
     app_env: Literal["development", "test", "production"] = "development"
     version: str = "0.9.0"
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     port: int = 8787
     log_level: str = "INFO"
     timezone: str = "Asia/Seoul"
@@ -54,6 +56,7 @@ class Settings(BaseSettings):
     github_default_repo: str | None = None
     github_api_version: str = "2026-03-10"
     github_webhook_secret: str | None = None
+    allow_unsigned_webhooks: bool = False
 
     google_calendar_api_base: str = "https://www.googleapis.com/calendar/v3"
     google_calendar_access_token: str | None = None
@@ -170,7 +173,13 @@ class Settings(BaseSettings):
 
     @property
     def api_key_is_secure(self) -> bool:
-        if not self.api_key:
+        return self._is_secure_api_key(self.api_key)
+
+    @staticmethod
+    def _is_secure_api_key(value: str | None) -> bool:
+        if not value or value.strip() != value:
+            return False
+        if any(unicodedata.category(character) == "Cc" for character in value):
             return False
         unsafe = {
             "change-me",
@@ -178,26 +187,31 @@ class Settings(BaseSettings):
             "secret",
             "password",
         }
-        return len(self.api_key) >= 32 and self.api_key not in unsafe
+        return len(value) >= 32 and value.casefold() not in unsafe
 
     @property
     def mobile_token_secret_is_secure(self) -> bool:
-        if not self.mobile_access_token_secret:
+        secret = self.mobile_access_token_secret
+        return bool(
+            self._is_secure_api_key(secret)
+            and secret
+            and secret.casefold() != "change-me-mobile-token-secret-before-use"
+        )
+
+    @property
+    def mobile_secret_reuses_api_key(self) -> bool:
+        mobile_secret = self.mobile_access_token_secret
+        api_key = self.api_key
+        if not mobile_secret or not api_key:
             return False
-        unsafe = {
-            "change-me",
-            "change-me-before-exposing-to-network",
-            "secret",
-            "password",
-        }
-        return len(self.mobile_access_token_secret) >= 32 and self.mobile_access_token_secret not in unsafe
+        return hmac.compare_digest(
+            mobile_secret.strip().encode("utf-8"), api_key.strip().encode("utf-8")
+        )
 
     @property
     def mobile_auth_configured(self) -> bool:
-        if self.mobile_token_secret_is_secure:
-            return True
-        if self.app_env == "test":
-            return True
+        if self.mobile_access_token_secret:
+            return self.mobile_token_secret_is_secure and not self.mobile_secret_reuses_api_key
         return self.app_env == "development" and self.api_key_is_secure
 
     @property
@@ -221,7 +235,9 @@ class Settings(BaseSettings):
             return True
         if not self.api_key_is_secure:
             return False
-        if self.mobile_enabled and not self.mobile_token_secret_is_secure:
+        if self.mobile_enabled and (
+            not self.mobile_token_secret_is_secure or self.mobile_secret_reuses_api_key
+        ):
             return False
         return True
 

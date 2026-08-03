@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "wave": "01",
+  "recordedAt": "2026-08-02T18:47:35Z",
+  "repositoryHead": "9c8f28d5a9eb34a2c30a869be620885023171977",
+  "deliveryState": "UNCOMMITTED_WORKTREE",
+  "completionState": "VERIFY_BLOCKED",
+  "orchestration": {
+    "runId": "run_21bd633062ba",
+    "tasks": {
+      "CARD-01-01": "task_e1a38fdc6b71",
+      "CARD-02-04-early-guard": "task_e545d1de9e27",
+      "CARD-01-02-initial": "task_582445cb6d45",
+      "CARD-01-02-retry": "task_73d1070219ff",
+      "CARD-01-02-revision": "task_96d5584583fe",
+      "CARD-01-03": "task_a1905a543e7b",
+      "CARD-01-04": "task_6965c7fd7da1"
+    }
+  },
+  "cardStatus": {
+    "CARD-01-01": "DONE",
+    "CARD-01-02": "IMPLEMENTED_VERIFY_BLOCKED",
+    "CARD-01-03": "IMPLEMENTED_VERIFY_BLOCKED",
+    "CARD-01-04": "DONE",
+    "CARD-02-04-guard": "EARLY_APPLIED_REMAINDER_DEFERRED_TO_PHASE_2"
+  },
+  "revisionLoop": {
+    "solFindings": [
+      {
+        "severity": "HIGH",
+        "card": "CARD-01-02",
+        "summary": "A colliding DLQ destination could leave the pending source mutated before transition completion and risk quarantine or loss.",
+        "state": "CLOSED"
+      },
+      {
+        "severity": "VERIFY_SELECTION",
+        "card": "CARD-01-04",
+        "summary": "The planned -k close_day selector initially collected none of the new tests.",
+        "state": "CLOSED"
+      }
+    ],
+    "lunaMax": {
+      "model": "gpt-5.6-luna",
+      "reasoningEffort": "max",
+      "sessionId": "019fc3c0-2da4-7e43-bcff-00a5a8a03e9b",
+      "processExitCode": 0,
+      "verdict": "PASS_WITH_ENVIRONMENT_BLOCKER",
+      "findings": {
+        "critical": 0,
+        "high": 0,
+        "medium": 0,
+        "low": 0,
+        "environmentBlockers": 1
+      },
+      "reportPath": "evidence/lunamax-wave01-final-review.md"
+    }
+  },
+  "verification": [
+    {
+      "command": "cd server && PYTHONPATH=. .venv/bin/python -m pytest -q tests/test_focus.py -k matrix",
+      "exitCode": 0,
+      "summary": "1 passed"
+    },
+    {
+      "command": "cd server && PYTHONPATH=. .venv/bin/python -m pytest -q tests/test_focus.py -k close_day",
+      "exitCode": 0,
+      "summary": "3 passed"
+    },
+    {
+      "command": "cd server && PYTHONPATH=. .venv/bin/python -m pytest -q tests/test_mobile.py -k capture",
+      "exitCode": 0,
+      "summary": "5 passed"
+    },
+    {
+      "command": "cd server && .venv/bin/python scripts/export_openapi.py --check",
+      "exitCode": 0,
+      "summary": "OPENAPI_CONTRACT_OK; sha256=b5ae0361a4b4b1cf22f29ff4742d927f6fa839e2faebca7a1a805842eaa10fbc"
+    },
+    {
+      "command": "cd server && PYTHONPATH=. .venv/bin/python -m pytest -q",
+      "exitCode": 0,
+      "summary": "108 passed"
+    },
+    {
+      "command": "cd ios && swift build --package-path Packages/ActionHubCore --target ActionHubCore",
+      "exitCode": 0,
+      "summary": "ActionHubCore source target built"
+    },
+    {
+      "command": "cd ios && swift test --package-path Packages/ActionHubCore --filter OfflineCaptureQueueTests",
+      "exitCode": 1,
+      "state": "BLOCKED",
+      "summary": "no such module XCTest; 0 tests executed"
+    },
+    {
+      "command": "cd ios && swift test --package-path Packages/ActionHubCore --filter MobileRefreshSnapshotTests",
+      "exitCode": 1,
+      "state": "BLOCKED",
+      "summary": "no such module XCTest; 0 tests executed"
+    },
+    {
+      "command": "cd ios && bash scripts/test_offline_queue_multiprocess.sh",
+      "exitCode": 0,
+      "summary": "OFFLINE_QUEUE_MULTIPROCESS_OK pending=50 dlq=0 purged=50 corrupt=0 lock_wait_ms>=1500 same_record_unique=1"
+    },
+    {
+      "command": "cd ios && python3 scripts/validate_ios_project.py",
+      "exitCode": 0,
+      "summary": "IOS_PROJECT_STATIC_OK sources=30"
+    },
+    {
+      "command": "cd ios && rg -n 'synchronizeChanges|readSyncCursor|writeSyncCursor' ActionHubApp",
+      "exitCode": 1,
+      "expectedExitCode": 1,
+      "summary": "zero active app references"
+    },
+    {
+      "command": "git diff --check",
+      "exitCode": 0,
+      "summary": "no whitespace errors"
+    }
+  ],
+  "blocker": {
+    "id": "ENV-01",
+    "summary": "Full Xcode/XCTest is absent from the host, so both exact Swift XCTest filters stop before test execution.",
+    "xcodeSelect": "/Library/Developer/CommandLineTools",
+    "xcodebuildExitCode": 1,
+    "swiftImportXCTestExitCode": 1,
+    "requiredClosure": "Install and select full Xcode, then rerun both blocked Swift test commands to exit 0."
+  },
+  "traceability": "CARD-02-04 guard: early-applied in Wave 01, remainder deferred to Phase 2",
+  "reports": [
+    "evidence/wave-01-revision-report.md",
+    "evidence/lunamax-wave01-final-review.md",
+    "evidence/wave-01-final-blocked.json"
+  ],
+  "prohibitedActionsObserved": {
+    "commit": false,
+    "stage": false,
+    "push": false,
+    "pullRequest": false,
+    "merge": false,
+    "iosDeviceSigning": false,
+    "deployment": false,
+    "externalProductionChange": false
+  }
+}

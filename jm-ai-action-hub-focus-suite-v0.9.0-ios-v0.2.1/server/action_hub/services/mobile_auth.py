@@ -29,6 +29,8 @@ TOKEN_ISSUER = "jm-ai-action-hub"
 TOKEN_AUDIENCE = "jm-ai-action-hub-ios"
 REFRESH_PREFIX = "ahmr_"
 PAIRING_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+MOBILE_AUTH_HKDF_SALT = b"jm-ai-action-hub/mobile-auth/salt/v1"
+MOBILE_AUTH_HKDF_INFO = b"jm-ai-action-hub/mobile-auth/v1"
 
 
 class MobileAuthError(RuntimeError):
@@ -62,17 +64,29 @@ def _b64url_decode(value: str) -> bytes:
 
 def _secret(settings: Settings) -> bytes:
     secret = settings.mobile_access_token_secret
-    if not secret:
-        if settings.app_env == "test":
-            secret = "test-mobile-token-secret-00000000000000000000"
-        elif settings.app_env == "development" and settings.api_key_is_secure:
-            secret = settings.api_key
-        else:
+    if secret:
+        if settings.mobile_secret_reuses_api_key:
+            raise MobileAuthError(
+                "Mobile access token secret must differ from the administrative API key",
+                code="mobile_secret_reuses_admin_key",
+            )
+        if not settings.mobile_token_secret_is_secure:
             raise MobileAuthError(
                 "Mobile access token secret is not configured",
                 code="mobile_auth_not_configured",
             )
-    return secret.encode("utf-8")
+        return secret.encode("utf-8")
+    if settings.app_env == "development" and settings.api_key_is_secure:
+        return _hkdf_sha256(settings.api_key.encode("utf-8"))
+    raise MobileAuthError(
+        "Mobile access token secret is not configured",
+        code="mobile_auth_not_configured",
+    )
+
+
+def _hkdf_sha256(ikm: bytes) -> bytes:
+    prk = hmac.new(MOBILE_AUTH_HKDF_SALT, ikm, hashlib.sha256).digest()
+    return hmac.new(prk, MOBILE_AUTH_HKDF_INFO + b"\x01", hashlib.sha256).digest()
 
 
 def mobile_signing_secret(settings: Settings) -> bytes:
@@ -187,7 +201,7 @@ def _canonical_pairing_code(code: str) -> str:
 
 def _pairing_hash(pairing_id: str, code: str, settings: Settings) -> str:
     canonical = _canonical_pairing_code(code)
-    return hmac.new(_secret(settings), f"{pairing_id}:{canonical}".encode("utf-8"), hashlib.sha256).hexdigest()
+    return hmac.new(_secret(settings), f"{pairing_id}:{canonical}".encode(), hashlib.sha256).hexdigest()
 
 
 def _new_pairing_code() -> str:
@@ -217,8 +231,7 @@ def create_pairing(
 ) -> MobilePairingCreateResponse:
     if not settings.mobile_enabled:
         raise MobileAuthError("Mobile companion is disabled", code="mobile_disabled")
-    if settings.app_env == "production" and not settings.mobile_token_secret_is_secure:
-        raise MobileAuthError("Mobile token secret is not production-ready", code="mobile_auth_not_configured")
+    _secret(settings)
     base_url = public_base_url.rstrip("/")
     if settings.app_env == "production" and not base_url.lower().startswith("https://"):
         raise ValueError("Production mobile pairing requires an HTTPS public base URL")
@@ -272,7 +285,7 @@ def _refresh_token_raw(
     still stores only a SHA-256 verifier.
     """
 
-    material = f"refresh:{token_id}:{device_id}:{family_id}".encode("utf-8")
+    material = f"refresh:{token_id}:{device_id}:{family_id}".encode()
     secret = _b64url_encode(hmac.new(_secret(settings), material, hashlib.sha256).digest())
     return f"{REFRESH_PREFIX}{token_id}.{secret}"
 
@@ -323,6 +336,7 @@ def claim_pairing(
     settings: Settings,
     request: MobilePairingClaimRequest,
 ) -> MobileTokenResponse:
+    _secret(settings)
     pairing = db.scalar(
         select(MobilePairingSession)
         .where(MobilePairingSession.id == request.pairing_id)
@@ -497,6 +511,7 @@ def rotate_refresh_token(
     settings: Settings,
     request: MobileRefreshRequest,
 ) -> MobileTokenResponse:
+    _secret(settings)
     token_id = _parse_refresh_token(request.refresh_token)
     token = db.scalar(
         select(MobileRefreshToken)

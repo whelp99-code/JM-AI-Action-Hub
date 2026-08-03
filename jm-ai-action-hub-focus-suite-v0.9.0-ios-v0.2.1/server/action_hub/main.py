@@ -16,15 +16,14 @@ from .api import (
     focus_router,
     health_router,
     mobile_admin_router,
+    mobile_focus_router,
     mobile_public_router,
     mobile_router,
-    mobile_focus_router,
     web_router,
     webhook_router,
 )
 from .config import Settings, get_settings
 from .database import Database
-
 
 logger = logging.getLogger(__name__)
 

@@ -29,7 +29,6 @@ from ..services.executor import approve_plan, execute_plan, reject_items, update
 from ..services.planner import create_plan, get_plan
 from .dependencies import get_db
 
-
 health_router = APIRouter(tags=["health"])
 api_router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_api_key)])
 web_router = APIRouter(include_in_schema=False)

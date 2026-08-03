@@ -50,6 +50,12 @@ mobile_focus_router = APIRouter(prefix="/api/v1/mobile", tags=["mobile-focus"])
 
 def _translate_error(exc: Exception) -> HTTPException:
     if isinstance(exc, LookupError):
+        prefix = "action_item_not_found:"
+        if str(exc).startswith(prefix):
+            return HTTPException(
+                status_code=404,
+                detail={"code": "action_item_not_found", "action_item_id": str(exc)[len(prefix):]},
+            )
         return HTTPException(status_code=404, detail=str(exc))
     if isinstance(exc, RuntimeError) and str(exc).startswith("revision_conflict:"):
         current = int(str(exc).split(":", 1)[1])

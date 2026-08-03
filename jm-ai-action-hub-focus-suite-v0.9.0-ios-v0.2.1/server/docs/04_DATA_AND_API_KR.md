@@ -116,8 +116,9 @@ resolved_at, note
 X-Action-Hub-Key: <configured key>
 ```
 
-- development/test에서 Key 미설정 시 로컬 사용 허용
-- production에서 안전한 Key 미설정 시 503
+- 보호 API는 development/test/production 모두 안전한 Key가 없으면 fail-closed(503)한다.
+- 안전한 Key가 설정된 경우에도 누락되거나 틀린 Key는 401이다.
+- 공개 예외는 `/health`, `/readiness`, 정적 Web UI, 그리고 의도된 모바일 public auth 경로(Pairing Claim/Refresh)뿐이다. 모바일 public auth도 자체 서명 키 구성이 안전하지 않으면 503으로 차단된다.
 - 틀린 Key는 401
 - `/health`, `/readiness`, PWA 정적 파일은 공개 가능하나 네트워크 레벨 보호 권장
 - Webhook은 Action Hub API Key가 아니라 Provider 서명으로 인증

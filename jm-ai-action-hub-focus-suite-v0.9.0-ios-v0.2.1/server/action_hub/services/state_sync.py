@@ -17,7 +17,6 @@ from ..models import (
 )
 from .audit import record_audit
 
-
 ROUTED_STATES = {
     ItemState.REGISTERED.value,
     ItemState.WAITING.value,

@@ -31,7 +31,6 @@ from ..services.rules import create_rule, suggest_rules, update_rule
 from ..services.workers import WorkerRegistry, queue_worker_dispatch
 from .dependencies import get_db
 
-
 feature_router = APIRouter(prefix="/api/v1", dependencies=[Depends(require_api_key)])
 
 

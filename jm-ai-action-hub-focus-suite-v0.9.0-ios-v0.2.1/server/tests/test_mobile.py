@@ -24,7 +24,7 @@ from action_hub.models import (
     utcnow,
 )
 from action_hub.services import mobile as mobile_service
-from action_hub.services.mobile_auth import MobileAuthError, decode_access_token
+from action_hub.services.mobile_auth import MobileAuthError, decode_access_token, mobile_signing_secret
 from action_hub.services.push import queue_push
 
 
@@ -72,12 +72,185 @@ def _signed_token(payload: dict, settings: Settings) -> str:
     body = segment(payload)
     signature = base64.urlsafe_b64encode(
         hmac.new(
-            b"test-mobile-token-secret-00000000000000000000",
+            settings.mobile_access_token_secret.encode("utf-8"),
             f"{header}.{body}".encode("ascii"),
             hashlib.sha256,
         ).digest()
     ).rstrip(b"=").decode("ascii")
     return f"{header}.{body}.{signature}"
+
+
+def _mobile_state_counts(app) -> tuple[int, int, int]:
+    with app.state.database.session_factory() as db:
+        return (
+            len(list(db.scalars(select(MobilePairingSession)))),
+            len(list(db.scalars(select(MobileDevice)))),
+            len(list(db.scalars(select(MobileRefreshToken)))),
+        )
+
+
+def test_explicit_mobile_secret_is_preferred_for_signing():
+    settings = Settings(
+        app_env="development",
+        api_key="a" * 32,
+        mobile_access_token_secret="m" * 48,
+    )
+    assert mobile_signing_secret(settings) == ("m" * 48).encode("utf-8")
+
+
+def test_development_api_key_fallback_uses_domain_separated_hkdf_vector():
+    settings = Settings(app_env="development", api_key="a" * 32)
+    derived = mobile_signing_secret(settings)
+    assert len(derived) == 32
+    assert derived != settings.api_key.encode("utf-8")
+    assert derived.hex() == "bf1d6bcac5a2cc5e9780c35384e7f5115c28342167c111dee1e7c42f69896e18"
+    assert mobile_signing_secret(settings) == derived
+
+
+@pytest.mark.parametrize(
+    ("mobile_secret", "expected_code", "expected_detail"),
+    [
+        (
+            "s" * 40,
+            "mobile_secret_reuses_admin_key",
+            "Mobile access token secret must differ from the administrative API key",
+        ),
+        (
+            "change-me-mobile-token-secret-before-use",
+            "mobile_auth_not_configured",
+            "Mobile access token secret is not configured",
+        ),
+    ],
+)
+def test_mobile_secret_misconfiguration_rejects_pairing_without_state_change(
+    tmp_path, mobile_secret, expected_code, expected_detail
+):
+    api_key = "s" * 40
+    settings = Settings(
+        app_env="test",
+        api_key=api_key,
+        mobile_access_token_secret=mobile_secret,
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'invalid-mobile-secret.db'}",
+        data_dir=tmp_path,
+    )
+    with pytest.raises(MobileAuthError) as error:
+        mobile_signing_secret(settings)
+    assert error.value.code == expected_code
+    app = create_app(settings)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/mobile/pairings",
+            headers={"X-Action-Hub-Key": api_key},
+            json={"public_base_url": "https://hub.example.test"},
+        )
+        assert response.status_code == 503
+        assert response.json()["detail"] == expected_detail
+    assert _mobile_state_counts(app) == (0, 0, 0)
+
+
+def test_production_missing_mobile_secret_rejects_pairing_without_state_change(tmp_path):
+    settings = Settings(
+        app_env="production",
+        api_key="a" * 40,
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'production-mobile-secret.db'}",
+        data_dir=tmp_path,
+    )
+    with pytest.raises(MobileAuthError) as error:
+        mobile_signing_secret(settings)
+    assert error.value.code == "mobile_auth_not_configured"
+    app = create_app(settings)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/mobile/pairings",
+            headers={"X-Action-Hub-Key": settings.api_key},
+            json={"public_base_url": "https://hub.example.test"},
+        )
+        assert response.status_code == 503
+        assert response.json()["detail"] == "Mobile access token secret is not configured"
+    assert _mobile_state_counts(app) == (0, 0, 0)
+
+
+@pytest.mark.parametrize(
+    ("configured_secret", "expected_detail"),
+    [
+        (None, "Mobile access token secret is not configured"),
+        (
+            "change-me-mobile-token-secret-before-use",
+            "Mobile access token secret is not configured",
+        ),
+        ("__ADMIN_API_KEY__", "Mobile access token secret must differ from the administrative API key"),
+    ],
+)
+def test_mobile_configuration_failure_precedes_claim_refresh_and_bearer_processing(
+    tmp_path, configured_secret, expected_detail
+):
+    api_key = "a" * 40
+    settings = Settings(
+        app_env="test",
+        api_key=api_key,
+        mobile_access_token_secret="m" * 48,
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'mobile-config-order.db'}",
+        data_dir=tmp_path,
+    )
+    app = create_app(settings)
+    with TestClient(app) as client:
+        client.headers["X-Action-Hub-Key"] = api_key
+        pending = client.post(
+            "/api/v1/mobile/pairings",
+            json={"public_base_url": "https://hub.example.test"},
+        ).json()
+        tokens = _pair(client)
+        before_counts = _mobile_state_counts(app)
+        refresh_id = tokens["refresh_token"].removeprefix("ahmr_").split(".", 1)[0]
+
+        settings.mobile_access_token_secret = (
+            api_key if configured_secret == "__ADMIN_API_KEY__" else configured_secret
+        )
+        claim_payload = {
+            "code": pending["code"],
+            "device_name": "Blocked iPhone",
+        }
+        missing_claim = client.post(
+            "/api/v1/mobile/pairings/claim",
+            json={**claim_payload, "pairing_id": "missing"},
+        )
+        existing_claim = client.post(
+            "/api/v1/mobile/pairings/claim",
+            json={**claim_payload, "pairing_id": pending["pairing_id"]},
+        )
+        malformed_refresh = client.post(
+            "/api/v1/mobile/token/refresh",
+            json={"refresh_token": "x" * 40},
+        )
+        existing_refresh = client.post(
+            "/api/v1/mobile/token/refresh",
+            json={"refresh_token": tokens["refresh_token"]},
+        )
+        missing_bearer = client.get("/api/v1/mobile/dashboard")
+        wrong_bearer = client.get(
+            "/api/v1/mobile/dashboard", headers={"Authorization": "Bearer wrong"}
+        )
+        valid_bearer = client.get("/api/v1/mobile/dashboard", headers=_auth(tokens))
+
+    for response in (
+        missing_claim,
+        existing_claim,
+        malformed_refresh,
+        existing_refresh,
+        missing_bearer,
+        wrong_bearer,
+        valid_bearer,
+    ):
+        assert response.status_code == 503
+        assert response.json()["detail"] == expected_detail
+    assert _mobile_state_counts(app) == before_counts
+    with app.state.database.session_factory() as db:
+        pairing = db.get(MobilePairingSession, pending["pairing_id"])
+        refresh = db.get(MobileRefreshToken, refresh_id)
+        device = db.get(MobileDevice, tokens["device"]["id"])
+        assert pairing is not None and pairing.status == "pending" and pairing.attempts == 0
+        assert refresh is not None and refresh.consumed_at is None and refresh.revoked_at is None
+        assert device is not None and device.status == "active"
 
 
 def test_mobile_migration_and_capabilities(client, settings):
@@ -137,7 +310,7 @@ def test_pairing_rejects_bad_code_and_expires_after_attempt_limit(client):
         "/api/v1/mobile/pairings",
         json={"public_base_url": "https://hub.example.test"},
     ).json()
-    for attempt in range(5):
+    for _attempt in range(5):
         response = client.post(
             "/api/v1/mobile/pairings/claim",
             json={
@@ -371,7 +544,11 @@ def test_mobile_capture_batch_is_idempotent_and_exposes_review(client):
     conflicting["captures"] = [dict(payload["captures"][0], text="다른 내용")]
     conflict = client.post("/api/v1/mobile/captures/batch", json=conflicting, headers=headers)
     assert conflict.status_code == 200
-    assert conflict.json()["receipts"][0]["status"] == "failed"
+    failed_receipt = conflict.json()["receipts"][0]
+    assert failed_receipt["client_capture_id"] == capture_id
+    assert failed_receipt["status"] == "failed"
+    assert failed_receipt["plan_id"] == receipt["plan_id"]
+    assert isinstance(failed_receipt["error"], str) and failed_receipt["error"]
 
     review = client.get("/api/v1/mobile/review", headers=headers)
     assert review.status_code == 200
