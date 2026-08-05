@@ -77,6 +77,25 @@ def _audit_response(actions: list[str]):
     return response
 
 
+def _new_route_404():
+    """MW intake status route (GET /intakes/{id}) returning 404.
+
+    sync_execution now tries this route first and only reads the legacy
+    audit trail as a fallback. Tests that exercise the audit-trail-derived
+    status mapping stub this as the first httpx.get() call so the second
+    call reaches the audit-shaped mock response as before.
+    """
+    return MagicMock(status_code=404)
+
+
+def _intake_status_response(data: dict):
+    """Simulate GET /api/v1/intakes/{intakeId} -> {"data": {...}}."""
+    response = MagicMock(status_code=200)
+    response.content = b"{}"
+    response.json.return_value = {"data": data, "meta": {}}
+    return response
+
+
 # --- bind -> running ---
 
 
@@ -85,7 +104,10 @@ def test_bound_intake_advances_execution_to_running(client, settings, tmp_path):
     item_id, execution_id = _create_dispatched_execution(client, intake_id="int_bound1")
     app = client.app
     response = _audit_response(["bind", "analyze", "create"])
-    with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response) as get:
+    with patch(
+        "action_hub.services.workers.master_worker_sync.httpx.get",
+        side_effect=[_new_route_404(), response],
+    ) as get:
         with app.state.database.session_factory() as db:
             summary = sync_master_worker_executions(db, live)
     assert summary.checked == 1
@@ -115,7 +137,10 @@ def test_discarded_intake_marks_execution_failed(client, settings, tmp_path):
     item_id, execution_id = _create_dispatched_execution(client, intake_id="int_disc1")
     app = client.app
     response = _audit_response(["discard", "bind", "analyze", "create"])
-    with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response):
+    with patch(
+        "action_hub.services.workers.master_worker_sync.httpx.get",
+        side_effect=[_new_route_404(), response],
+    ):
         with app.state.database.session_factory() as db:
             summary = sync_master_worker_executions(db, live)
     assert summary.updated == 1
@@ -137,7 +162,10 @@ def test_pending_intake_leaves_execution_dispatched(client, settings, tmp_path, 
     _item_id, execution_id = _create_dispatched_execution(client, intake_id="int_pending1")
     app = client.app
     response = _audit_response(actions)
-    with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response):
+    with patch(
+        "action_hub.services.workers.master_worker_sync.httpx.get",
+        side_effect=[_new_route_404(), response],
+    ):
         with app.state.database.session_factory() as db:
             summary = sync_master_worker_executions(db, live)
     assert summary.unchanged == 1
@@ -153,7 +181,10 @@ def test_no_audit_history_is_unchanged_not_failed(client, settings, tmp_path):
     _create_dispatched_execution(client, intake_id="int_none1")
     app = client.app
     response = _audit_response([])
-    with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response):
+    with patch(
+        "action_hub.services.workers.master_worker_sync.httpx.get",
+        side_effect=[_new_route_404(), response],
+    ):
         with app.state.database.session_factory() as db:
             summary = sync_master_worker_executions(db, live)
     assert summary.unchanged == 1
@@ -274,7 +305,9 @@ def test_partial_failure_does_not_abort_other_executions(client, settings, tmp_p
     _create_dispatched_execution(client, intake_id="int_ok1")
     _create_dispatched_execution(client, intake_id="int_ok2")
     app = client.app
-    responses = [_audit_response(["bind"]), MagicMock(status_code=401)]
+    # exec 1: new route 404s -> fall back to audit trail -> "bind" -> updated.
+    # exec 2: new route itself returns 401 -> failed (no fallback on a non-404 error).
+    responses = [_new_route_404(), _audit_response(["bind"]), MagicMock(status_code=401)]
     with patch("action_hub.services.workers.master_worker_sync.httpx.get", side_effect=responses):
         with app.state.database.session_factory() as db:
             summary = sync_master_worker_executions(db, live)
@@ -291,6 +324,203 @@ def test_already_running_execution_is_unchanged_when_still_bound(client, setting
     _item_id, execution_id = _create_dispatched_execution(client, intake_id="int_stable", state="running")
     app = client.app
     response = _audit_response(["bind", "analyze", "create"])
+    with patch(
+        "action_hub.services.workers.master_worker_sync.httpx.get",
+        side_effect=[_new_route_404(), response],
+    ):
+        with app.state.database.session_factory() as db:
+            execution = db.get(WorkerExecution, execution_id)
+            outcome = sync_execution(db, execution, live)
+            db.commit()
+    assert outcome.outcome == "unchanged"
+    assert outcome.new_state is None
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        assert execution.state == "running"
+
+
+# --- new route: GET /api/v1/intakes/{intakeId} (CARD B-01b) ---
+
+
+def test_new_route_is_tried_first_and_used_when_available(client, settings, tmp_path):
+    live = _live_settings(settings, tmp_path)
+    item_id, execution_id = _create_dispatched_execution(client, intake_id="int_newbound")
+    app = client.app
+    response = _intake_status_response(
+        {"intakeId": "int_newbound", "state": "bound", "boundProjectId": "prj_1", "updatedAt": "t"}
+    )
+    with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response) as get:
+        with app.state.database.session_factory() as db:
+            summary = sync_master_worker_executions(db, live)
+    assert get.call_count == 1
+    call = get.call_args
+    assert call.args[0] == "http://127.0.0.1:4310/api/v1/intakes/int_newbound"
+    assert call.kwargs["headers"]["Authorization"] == "Bearer mw-owner-token"
+    assert summary.updated == 1
+    assert summary.outcomes[0].new_state == "running"
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        item = db.get(ActionItem, item_id)
+        assert execution.state == "running"
+        assert item.state == ItemState.RUNNING.value
+
+
+def test_new_route_discarded_intake_marks_execution_failed(client, settings, tmp_path):
+    live = _live_settings(settings, tmp_path)
+    item_id, execution_id = _create_dispatched_execution(client, intake_id="int_newdisc")
+    app = client.app
+    response = _intake_status_response({"intakeId": "int_newdisc", "state": "discarded", "updatedAt": "t"})
+    with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response):
+        with app.state.database.session_factory() as db:
+            summary = sync_master_worker_executions(db, live)
+    assert summary.updated == 1
+    assert summary.outcomes[0].new_state == "failed"
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        item = db.get(ActionItem, item_id)
+        assert execution.state == "failed"
+        assert execution.error == "MW intake was discarded"
+        assert item.state == ItemState.FAILED.value
+
+
+@pytest.mark.parametrize("intake_state", ["draft", "analyzed"])
+def test_new_route_intake_still_pending_leaves_execution_unchanged(client, settings, tmp_path, intake_state):
+    live = _live_settings(settings, tmp_path)
+    _item_id, execution_id = _create_dispatched_execution(client, intake_id="int_newpending")
+    app = client.app
+    response = _intake_status_response({"intakeId": "int_newpending", "state": intake_state, "updatedAt": "t"})
+    with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response):
+        with app.state.database.session_factory() as db:
+            summary = sync_master_worker_executions(db, live)
+    assert summary.unchanged == 1
+    assert summary.updated == 0
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        assert execution.state == "dispatched"
+
+
+# --- new route: Objective state mapping (packages/contracts/src/types.ts ObjectiveState) ---
+
+
+@pytest.mark.parametrize(
+    "objective_state",
+    [
+        "captured", "identified", "scoped", "compiled", "planned",
+        "awaiting_approval", "executing", "verifying", "resolving", "packaging",
+    ],
+)
+def test_new_route_objective_in_progress_states_map_to_running(client, settings, tmp_path, objective_state):
+    live = _live_settings(settings, tmp_path)
+    _item_id, execution_id = _create_dispatched_execution(client, intake_id="int_objprog")
+    app = client.app
+    response = _intake_status_response(
+        {
+            "intakeId": "int_objprog", "state": "bound", "boundProjectId": "prj_1",
+            "objectiveId": "obj_1", "objectiveState": objective_state, "updatedAt": "t",
+        }
+    )
+    with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response):
+        with app.state.database.session_factory() as db:
+            summary = sync_master_worker_executions(db, live)
+    assert summary.updated == 1
+    assert summary.outcomes[0].new_state == "running"
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        assert execution.state == "running"
+
+
+# NOTE: the following Objective-state tests seed the execution in a non-"dispatched"
+# starting state (to prove existing "running"/"human_review" state is left alone or
+# advanced correctly), so they call sync_execution directly -- sync_master_worker_executions
+# only selects WorkerExecution rows with state == "dispatched" and would silently skip them.
+
+
+@pytest.mark.parametrize("objective_state", ["delivered", "closed"])
+def test_new_route_objective_delivered_or_closed_maps_to_completed(client, settings, tmp_path, objective_state):
+    live = _live_settings(settings, tmp_path)
+    item_id, execution_id = _create_dispatched_execution(client, intake_id="int_objdone", state="running")
+    app = client.app
+    response = _intake_status_response(
+        {
+            "intakeId": "int_objdone", "state": "bound", "boundProjectId": "prj_1",
+            "objectiveId": "obj_2", "objectiveState": objective_state, "updatedAt": "t",
+        }
+    )
+    with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response):
+        with app.state.database.session_factory() as db:
+            execution = db.get(WorkerExecution, execution_id)
+            outcome = sync_execution(db, execution, live)
+            db.commit()
+    assert outcome.outcome == "updated"
+    assert outcome.new_state == "completed"
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        item = db.get(ActionItem, item_id)
+        assert execution.state == "completed"
+        assert execution.completed_at is not None
+        assert item.state == ItemState.COMPLETED.value
+
+
+def test_new_route_objective_blocked_maps_to_human_review(client, settings, tmp_path):
+    live = _live_settings(settings, tmp_path)
+    item_id, execution_id = _create_dispatched_execution(client, intake_id="int_objblocked", state="running")
+    app = client.app
+    response = _intake_status_response(
+        {
+            "intakeId": "int_objblocked", "state": "bound", "boundProjectId": "prj_1",
+            "objectiveId": "obj_3", "objectiveState": "blocked", "updatedAt": "t",
+        }
+    )
+    with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response):
+        with app.state.database.session_factory() as db:
+            execution = db.get(WorkerExecution, execution_id)
+            outcome = sync_execution(db, execution, live)
+            db.commit()
+    assert outcome.outcome == "updated"
+    assert outcome.new_state == "human_review"
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        item = db.get(ActionItem, item_id)
+        assert execution.state == "human_review"
+        assert item.state == ItemState.HUMAN_REVIEW.value
+
+
+def test_new_route_objective_cancelled_maps_to_failed(client, settings, tmp_path):
+    live = _live_settings(settings, tmp_path)
+    item_id, execution_id = _create_dispatched_execution(client, intake_id="int_objcancel", state="running")
+    app = client.app
+    response = _intake_status_response(
+        {
+            "intakeId": "int_objcancel", "state": "bound", "boundProjectId": "prj_1",
+            "objectiveId": "obj_4", "objectiveState": "cancelled", "updatedAt": "t",
+        }
+    )
+    with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response):
+        with app.state.database.session_factory() as db:
+            execution = db.get(WorkerExecution, execution_id)
+            outcome = sync_execution(db, execution, live)
+            db.commit()
+    assert outcome.outcome == "updated"
+    assert outcome.new_state == "failed"
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        item = db.get(ActionItem, item_id)
+        assert execution.state == "failed"
+        assert execution.error == "MW objective was cancelled"
+        assert item.state == ItemState.FAILED.value
+
+
+def test_new_route_objective_paused_leaves_execution_unchanged(client, settings, tmp_path):
+    """Owner explicitly paused the Objective in MW -- not a completion signal, must not clobber state."""
+    live = _live_settings(settings, tmp_path)
+    _item_id, execution_id = _create_dispatched_execution(client, intake_id="int_objpaused", state="running")
+    app = client.app
+    response = _intake_status_response(
+        {
+            "intakeId": "int_objpaused", "state": "bound", "boundProjectId": "prj_1",
+            "objectiveId": "obj_5", "objectiveState": "paused", "updatedAt": "t",
+        }
+    )
     with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response):
         with app.state.database.session_factory() as db:
             execution = db.get(WorkerExecution, execution_id)
@@ -301,6 +531,143 @@ def test_already_running_execution_is_unchanged_when_still_bound(client, setting
     with app.state.database.session_factory() as db:
         execution = db.get(WorkerExecution, execution_id)
         assert execution.state == "running"
+
+
+def test_new_route_unrecognized_objective_state_is_fail_closed(client, settings, tmp_path):
+    """A future MW ObjectiveState value this module doesn't know yet must not be guessed at."""
+    live = _live_settings(settings, tmp_path)
+    _item_id, execution_id = _create_dispatched_execution(client, intake_id="int_objunknown", state="running")
+    app = client.app
+    response = _intake_status_response(
+        {
+            "intakeId": "int_objunknown", "state": "bound", "boundProjectId": "prj_1",
+            "objectiveId": "obj_6", "objectiveState": "some_future_state", "updatedAt": "t",
+        }
+    )
+    with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response):
+        with app.state.database.session_factory() as db:
+            execution = db.get(WorkerExecution, execution_id)
+            outcome = sync_execution(db, execution, live)
+            db.commit()
+    assert outcome.outcome == "unchanged"
+    assert outcome.new_state is None
+    assert "unrecognized" in outcome.reason.lower()
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        assert execution.state == "running"
+
+
+def test_new_route_objective_id_present_without_state_is_fail_closed(client, settings, tmp_path):
+    """Defensive edge case: objectiveId key present but objectiveState missing/falsy."""
+    live = _live_settings(settings, tmp_path)
+    _item_id, execution_id = _create_dispatched_execution(client, intake_id="int_objnostate", state="running")
+    app = client.app
+    response = _intake_status_response(
+        {
+            "intakeId": "int_objnostate", "state": "bound", "boundProjectId": "prj_1",
+            "objectiveId": "obj_7", "objectiveState": None, "updatedAt": "t",
+        }
+    )
+    with patch("action_hub.services.workers.master_worker_sync.httpx.get", return_value=response):
+        with app.state.database.session_factory() as db:
+            execution = db.get(WorkerExecution, execution_id)
+            outcome = sync_execution(db, execution, live)
+            db.commit()
+    assert outcome.outcome == "unchanged"
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        assert execution.state == "running"
+
+
+# --- new route 404 fallback (older MW without GET /intakes/{id}) ---
+
+
+def test_new_route_404_falls_back_to_audit_and_records_it(client, settings, tmp_path):
+    live = _live_settings(settings, tmp_path)
+    item_id, execution_id = _create_dispatched_execution(client, intake_id="int_fallback1")
+    app = client.app
+    audit_response = _audit_response(["bind", "analyze", "create"])
+    with patch(
+        "action_hub.services.workers.master_worker_sync.httpx.get",
+        side_effect=[_new_route_404(), audit_response],
+    ) as get:
+        with app.state.database.session_factory() as db:
+            summary = sync_master_worker_executions(db, live)
+    assert get.call_count == 2
+    first_call, second_call = get.call_args_list
+    assert first_call.args[0] == "http://127.0.0.1:4310/api/v1/intakes/int_fallback1"
+    assert second_call.args[0] == "http://127.0.0.1:4310/api/v1/audit"
+    assert summary.updated == 1
+    outcome = summary.outcomes[0]
+    assert outcome.new_state == "running"
+    assert "fell back" in outcome.reason.lower()
+    assert "404" in outcome.reason
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        item = db.get(ActionItem, item_id)
+        assert execution.state == "running"
+        assert item.state == ItemState.RUNNING.value
+
+
+def test_new_route_404_then_audit_401_is_fail_closed_and_records_fallback(client, settings, tmp_path):
+    live = _live_settings(settings, tmp_path)
+    _item_id, execution_id = _create_dispatched_execution(client, intake_id="int_fallback2")
+    app = client.app
+    with patch(
+        "action_hub.services.workers.master_worker_sync.httpx.get",
+        side_effect=[_new_route_404(), MagicMock(status_code=401)],
+    ):
+        with app.state.database.session_factory() as db:
+            summary = sync_master_worker_executions(db, live)
+    assert summary.failed == 1
+    assert summary.updated == 0
+    outcome = summary.outcomes[0]
+    assert "fell back" in outcome.reason.lower()
+    assert "401" in outcome.reason
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        assert execution.state == "dispatched"
+
+
+# --- new route reachable but malformed: fail-closed without attempting a fallback ---
+
+
+def test_new_route_malformed_response_is_fail_closed_without_fallback(client, settings, tmp_path):
+    live = _live_settings(settings, tmp_path)
+    _item_id, execution_id = _create_dispatched_execution(client, intake_id="int_malformed")
+    app = client.app
+    response = MagicMock(status_code=200)
+    response.content = b"{}"
+    response.json.return_value = {"data": ["not", "an", "object"], "meta": {}}
+    with patch(
+        "action_hub.services.workers.master_worker_sync.httpx.get", return_value=response
+    ) as get:
+        with app.state.database.session_factory() as db:
+            summary = sync_master_worker_executions(db, live)
+    assert get.call_count == 1  # malformed body is not a 404; no fallback is attempted
+    assert summary.failed == 1
+    assert summary.updated == 0
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        assert execution.state == "dispatched"
+
+
+def test_new_route_401_is_fail_closed_without_fallback(client, settings, tmp_path):
+    live = _live_settings(settings, tmp_path)
+    _item_id, execution_id = _create_dispatched_execution(client, intake_id="int_new401")
+    app = client.app
+    with patch(
+        "action_hub.services.workers.master_worker_sync.httpx.get",
+        return_value=MagicMock(status_code=401),
+    ) as get:
+        with app.state.database.session_factory() as db:
+            summary = sync_master_worker_executions(db, live)
+    assert get.call_count == 1
+    assert summary.failed == 1
+    assert "401" in summary.outcomes[0].reason
+    with app.state.database.session_factory() as db:
+        execution = db.get(WorkerExecution, execution_id)
+        assert execution.state == "dispatched"
 
 
 # --- CLI wiring ---
