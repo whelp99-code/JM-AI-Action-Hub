@@ -162,3 +162,26 @@ run-name: "Action Hub ${{ inputs.action_id }}"
 ```
 
 Workflow 내부에서는 최소 권한, 제한된 Secret, 테스트, PR 생성까지만 수행하고 자동 Merge를 하지 않는 구성이 권장된다.
+
+## 12. Master Worker 역채널 (`worker-sync`, CARD B-01)
+
+`master-worker` Route가 `kind: local_webhook`으로 설정되면 `LocalWebhookWorker`가 GitHub Workflow 대신 로컬 JM-AI Master Worker(MW)에 `POST /api/v1/intakes`로 Goal Intake만 생성한다(§4~§5의 GitHub Workflow 계약과는 별개 경로). MW는 완료를 Action Hub로 통지하지 않으므로, 이 경로로 만든 Execution은 기본적으로 `dispatched`에 머문다.
+
+**명령**: `action-hub worker-sync`
+
+- `worker="master-worker"` 이면서 `state="dispatched"`인 Execution만 대상으로 한다.
+- `dispatch_id`(형식 `mw-intake-{intakeId}`)에서 intake id를 추출하고, MW의 감사 로그를 조회한다: `GET /api/v1/audit?objectType=intake&objectId=<id>&result=success&limit=200`.
+- MW 인증은 `LocalWebhookWorker`와 동일한 `worker_routes.master-worker.baseUrl`(loopback 전용) + `credentialFile`(0600, `{"token": ...}`)을 재사용한다. 별도 자격증명 체계를 두지 않는다.
+- **Owner 명시 실행 전용**: 자동 백그라운드 폴러가 아니다. `worker-once`/`action-hub-worker`의 정기 루프에 포함되지 않으며, Owner가 CLI를 직접 실행할 때만 동작한다.
+
+상태 매핑(감사 로그의 가장 최근 `action`을 기준):
+
+| MW 감사 action | Execution 상태 |
+|---|---|
+| `bind` (마지막 상태 전이) | `running` |
+| `discard` (마지막 상태 전이) | `failed` |
+| `create`/`analyze`만 있고 `bind`/`discard` 없음 | 변경 없음(`dispatched` 유지) |
+
+**알려진 한계**: MW는 단일 Intake 조회 `GET` 라우트가 없고(`POST`/`PATCH`/`analyze`/`bind`/`DELETE`만 존재), Objective 목록 조회 라우트도 없다. Intake가 Objective로 승격된 뒤에는 그 Objective의 감사 이벤트에 `intakeId` 역참조가 없어 Action Hub가 추적할 수 없다. 따라서 `worker-sync`는 **Intake가 Project에 bind 되었는지(=Owner가 받아들였는지)** 와 **discard 되었는지**만 관찰할 수 있고, Objective/Plan/Release까지 이어지는 실제 "완료"는 관찰 범위 밖이다. `bind`는 Execution을 `completed`가 아니라 `running`으로만 올린다.
+
+**Fail-closed**: MW 도달 불가, 401, 404, 응답 형식 이상 등은 Execution 상태를 그대로 두고 사유만 기록한다. 개별 Execution 실패가 배치 전체를 중단시키지 않는다. CLI는 하나 이상 실패가 있으면 종료 코드 1을 반환한다(요약 JSON은 성공 여부와 무관하게 stdout에 출력).
