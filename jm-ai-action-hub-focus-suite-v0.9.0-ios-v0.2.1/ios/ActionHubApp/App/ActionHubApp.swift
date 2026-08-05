@@ -30,7 +30,7 @@ struct ActionHubApp: App {
       switch phase {
       case .active:
         Task {
-          await model.biometricLock.unlock()
+          await model.biometricLock.unlockIfNeeded()
           model.handlePendingSystemRoute()
           await model.flushCaptures()
           await model.refreshAll()
