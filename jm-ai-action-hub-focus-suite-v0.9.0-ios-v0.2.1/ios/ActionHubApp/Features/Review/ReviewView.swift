@@ -18,7 +18,7 @@ struct ReviewView: View {
         List(model.reviewPlans) { plan in
           NavigationLink(value: plan.id) { ReviewPlanRow(plan: plan) }
         }
-        .refreshable { await model.refreshAll() }
+        .refreshable { await model.refreshAllDetached() }
       }
     }
     .navigationTitle("검토")

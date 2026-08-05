@@ -25,7 +25,7 @@ struct TodayView: View {
           "오늘 정보 없음", systemImage: "sun.max", description: Text("당겨서 새로고침하세요."))
       }
     }
-    .refreshable { await model.refreshAll() }
+    .refreshable { await model.refreshAllDetached() }
     .navigationTitle("오늘")
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) {

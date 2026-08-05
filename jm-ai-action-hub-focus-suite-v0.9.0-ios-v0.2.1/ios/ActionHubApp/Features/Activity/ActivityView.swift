@@ -40,7 +40,7 @@ struct ActivityView: View {
           }
           .buttonStyle(.plain)
         }
-        .refreshable { await model.refreshAll() }
+        .refreshable { await model.refreshAllDetached() }
       }
     }
     .navigationTitle("활동")

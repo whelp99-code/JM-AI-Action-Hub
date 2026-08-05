@@ -141,6 +141,14 @@ final class AppModel: ObservableObject {
     connectionState = .disconnected
   }
 
+  /// Entry point for `.refreshable`. SwiftUI cancels the task backing a pull-to-refresh as
+  /// soon as the gesture resolves, which cancelled the in-flight URLSession requests and
+  /// surfaced as a "cancelled" network error. An unstructured task does not inherit that
+  /// cancellation, so the refresh runs to completion either way.
+  func refreshAllDetached() async {
+    await Task { await self.refreshAll() }.value
+  }
+
   func refreshAll() async {
     guard case .connected = connectionState else { return }
     isRefreshing = true
@@ -513,6 +521,10 @@ final class AppModel: ObservableObject {
     if case ActionHubAPIError.revoked = error {
       connectionState = .disconnected
     }
+    // A cancelled request is the result of the user or the system abandoning the work, not a
+    // failure worth reporting; showing it reads as "네트워크 오류: cancelled".
+    if error is CancellationError { return }
+    if let urlError = error as? URLError, urlError.code == .cancelled { return }
     lastError = error.localizedDescription
   }
 

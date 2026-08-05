@@ -56,7 +56,7 @@ struct PlanDetailView: View {
             .disabled(isWorking)
           }
         }
-        .refreshable { await load() }
+        .refreshable { await Task { await load() }.value }
         .confirmationDialog("이 계획의 모든 항목을 제외합니까?", isPresented: $showRejectConfirmation) {
           Button("전체 제외", role: .destructive) { Task { await reject(plan) } }
         }
