@@ -46,4 +46,27 @@ final class ModelCodingTests: XCTestCase {
     XCTAssertEqual(
       Int(fractional.date.timeIntervalSince1970), Int(whole.date.timeIntervalSince1970))
   }
+
+  /// A stored session must survive the encode/decode round trip used by the Keychain store.
+  /// `convertToSnakeCase` and `convertFromSnakeCase` are not inverses for acronym-suffixed
+  /// names, which silently broke session restore on every cold launch.
+  func testStoredMobileSessionSurvivesKeychainRoundTrip() throws {
+    let deviceData = Data(
+      #"{"id":"33333333-3333-4333-8333-333333333333","device_name":"iPhone","platform":"ios","hardware_model":"iPhone17,1","os_version":"26.5.2","app_version":"0.2.1","status":"active","scopes":["brief:read"],"token_version":1,"push_environment":"sandbox","notification_preferences":{},"last_seen_at":null,"revoked_at":null,"created_at":"2026-08-05T01:00:00Z","updated_at":"2026-08-05T01:00:00Z","push_registered":false}"#
+        .utf8)
+    let device = try ActionHubJSON.decoder().decode(MobileDevice.self, from: deviceData)
+    let session = StoredMobileSession(
+      serverURL: URL(string: "https://jm-acloud.example.ts.net")!,
+      accessToken: "access",
+      accessTokenExpiresAt: Date(timeIntervalSince1970: 1_800_000_000),
+      refreshToken: "refresh",
+      refreshTokenExpiresAt: Date(timeIntervalSince1970: 1_800_086_400),
+      device: device
+    )
+    let encoded = try ActionHubJSON.encoder().encode(session)
+    let json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    XCTAssertNotNil(json["server_url"], "on-disk key must stay server_url for existing sessions")
+    let decoded = try ActionHubJSON.decoder().decode(StoredMobileSession.self, from: encoded)
+    XCTAssertEqual(decoded, session)
+  }
 }
