@@ -82,7 +82,9 @@ private struct MainTabView: View {
         .tabItem { Label("설정", systemImage: "gearshape") }
         .tag(AppTab.settings)
     }
-    .overlay(alignment: .bottom) {
+    // Sits above the tab bar's trailing edge: centred on the bar it covered the middle tab
+    // ("검토"), making that tab untappable.
+    .overlay(alignment: .bottomTrailing) {
       Button {
         model.isCapturePresented = true
       } label: {
@@ -94,7 +96,8 @@ private struct MainTabView: View {
           .shadow(radius: 8, y: 4)
       }
       .accessibilityLabel("빠른 입력")
-      .offset(y: -8)
+      .padding(.trailing, 20)
+      .padding(.bottom, 68)
     }
     .sheet(isPresented: $model.isCapturePresented) {
       CaptureView()
