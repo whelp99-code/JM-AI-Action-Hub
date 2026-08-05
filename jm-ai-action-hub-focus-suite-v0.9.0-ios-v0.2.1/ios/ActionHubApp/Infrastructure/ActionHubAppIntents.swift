@@ -5,7 +5,7 @@ import Foundation
 struct CaptureTextIntent: AppIntent {
   static let title: LocalizedStringResource = "Action Hub에 추가"
   static let description = IntentDescription("말하거나 입력한 내용을 Action Hub 검토 큐에 안전하게 저장합니다.")
-  static var openAppWhenRun = false
+  static let openAppWhenRun = false
 
   @Parameter(title: "내용", requestValueDialog: "무엇을 Action Hub에 추가할까요?")
   var text: String
@@ -22,7 +22,7 @@ struct CaptureTextIntent: AppIntent {
 struct OpenActionHubIntent: AppIntent {
   static let title: LocalizedStringResource = "Action Hub 열기"
   static let description = IntentDescription("오늘의 계획과 검토 대기를 엽니다.")
-  static var openAppWhenRun = true
+  static let openAppWhenRun = true
 
   func perform() async throws -> some IntentResult {
     try writeRoute("today")
@@ -33,7 +33,7 @@ struct OpenActionHubIntent: AppIntent {
 struct OpenFocusIntent: AppIntent {
   static let title: LocalizedStringResource = "Focus 열기"
   static let description = IntentDescription("Dual Big3와 현재 집중 세션을 엽니다.")
-  static var openAppWhenRun = true
+  static let openAppWhenRun = true
 
   func perform() async throws -> some IntentResult {
     try writeRoute("focus")
@@ -44,7 +44,7 @@ struct OpenFocusIntent: AppIntent {
 struct OpenTriageIntent: AppIntent {
   static let title: LocalizedStringResource = "분류 대기 열기"
   static let description = IntentDescription("실행·계획·위임·보류를 결정할 업무를 엽니다.")
-  static var openAppWhenRun = true
+  static let openAppWhenRun = true
 
   func perform() async throws -> some IntentResult {
     try writeRoute("triage")
@@ -55,7 +55,7 @@ struct OpenTriageIntent: AppIntent {
 struct OpenMatrixIntent: AppIntent {
   static let title: LocalizedStringResource = "우선순위 매트릭스 열기"
   static let description = IntentDescription("아이젠하워 매트릭스와 사분면별 업무를 엽니다.")
-  static var openAppWhenRun = true
+  static let openAppWhenRun = true
 
   func perform() async throws -> some IntentResult {
     try writeRoute("matrix")

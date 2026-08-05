@@ -177,6 +177,10 @@ final class OfflineCaptureQueueTests: XCTestCase {
     XCTAssertEqual(migratedPending.map(\.clientCaptureId), [capture.clientCaptureId])
     let migrated = try ActionHubJSON.decoder().decode(
       OfflineCaptureQueueRecord.self, from: Data(contentsOf: rawURL))
-    XCTAssertEqual(migrated, OfflineCaptureQueueRecord(capture: capture))
+    // Compare against the persisted-precision capture: ISO-8601 fractional encoding keeps
+    // milliseconds, so an in-memory Date's sub-millisecond tail never survives the file.
+    let persistedCapture = try ActionHubJSON.decoder().decode(
+      CaptureInput.self, from: ActionHubJSON.encoder().encode(capture))
+    XCTAssertEqual(migrated, OfflineCaptureQueueRecord(capture: persistedCapture))
   }
 }

@@ -3,7 +3,7 @@ import UIKit
 import UserNotifications
 
 @MainActor
-final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
+final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDelegate {
   static let shared = NotificationManager()
   weak var model: AppModel?
 
