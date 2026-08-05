@@ -47,6 +47,27 @@ final class ModelCodingTests: XCTestCase {
       Int(fractional.date.timeIntervalSince1970), Int(whole.date.timeIntervalSince1970))
   }
 
+  /// RV-01: the review screen looked like a no-op when the server silently blocked an
+  /// item that still needed review. `blocked_item_ids` on the approve response is how
+  /// the app learns that happened, so it must decode into the plan.
+  func testActionPlanDecodesBlockedItemIds() throws {
+    let data = Data(
+      #"{"id":"plan-1","inbox_id":"inbox-1","status":"draft","parser_name":"rules-v2","summary":"","reference_time":"2026-08-05T01:00:00Z","revision":1,"created_at":"2026-08-05T01:00:00Z","updated_at":"2026-08-05T01:00:00Z","items":[],"inbox":null,"blocked_item_ids":["item-1","item-2"]}"#
+        .utf8)
+    let plan = try ActionHubJSON.decoder().decode(ActionPlan.self, from: data)
+    XCTAssertEqual(plan.blockedItemIds, ["item-1", "item-2"])
+  }
+
+  /// Older or unrelated PlanRead responses (get/patch/execute) never populate
+  /// `blocked_item_ids`; decoding must default to empty rather than fail.
+  func testActionPlanDefaultsBlockedItemIdsWhenFieldIsAbsent() throws {
+    let data = Data(
+      #"{"id":"plan-1","inbox_id":"inbox-1","status":"draft","parser_name":"rules-v2","summary":"","reference_time":"2026-08-05T01:00:00Z","revision":1,"created_at":"2026-08-05T01:00:00Z","updated_at":"2026-08-05T01:00:00Z","items":[],"inbox":null}"#
+        .utf8)
+    let plan = try ActionHubJSON.decoder().decode(ActionPlan.self, from: data)
+    XCTAssertEqual(plan.blockedItemIds, [])
+  }
+
   /// A stored session must survive the encode/decode round trip used by the Keychain store.
   /// `convertToSnakeCase` and `convertFromSnakeCase` are not inverses for acronym-suffixed
   /// names, which silently broke session restore on every cold launch.

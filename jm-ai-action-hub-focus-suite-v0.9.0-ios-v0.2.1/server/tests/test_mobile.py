@@ -774,6 +774,139 @@ def test_mobile_revision_conflict_and_approval_execution(client):
     assert execute.json()["completed"] == 1
 
 
+def test_mobile_approve_clears_review_flag_and_drops_from_review_list(client):
+    # Regression for RV-01: the review tab showed no visible change after tapping
+    # 승인 because approve_plan() left needs_review=True on approved items, so the
+    # item stayed matched by the "needs_review OR draft" review-list filter.
+    tokens = _pair(client)
+    headers = _auth(tokens)
+    response = client.post(
+        "/api/v1/mobile/captures/batch",
+        headers=headers,
+        json={
+            "captures": [
+                {
+                    "client_capture_id": str(uuid.uuid4()),
+                    "text": "내일 고객 미팅",
+                    "reference_time": "2026-07-30T09:00:00+09:00",
+                }
+            ]
+        },
+    ).json()
+    plan_id = response["receipts"][0]["plan_id"]
+    plan = client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+    item = plan["items"][0]
+    assert item["needs_review"] is True
+    review_reason = item["review_reason"]
+    assert review_reason
+
+    review_before = client.get("/api/v1/mobile/review", headers=headers)
+    assert any(p["id"] == plan_id for p in review_before.json())
+
+    approve = client.post(
+        f"/api/v1/mobile/plans/{plan_id}/approve",
+        headers=headers,
+        json={
+            "item_ids": [item["id"]],
+            "expected_plan_revision": plan["revision"],
+            "force_review_items": True,
+        },
+    )
+    assert approve.status_code == 200, approve.text
+    approved_item = approve.json()["items"][0]
+    assert approved_item["state"] == "approved"
+    assert approved_item["needs_review"] is False
+    # The reason history must survive the flag being cleared.
+    assert approved_item["review_reason"] == review_reason
+    assert approve.json()["blocked_item_ids"] == []
+
+    review_after = client.get("/api/v1/mobile/review", headers=headers)
+    assert all(p["id"] != plan_id for p in review_after.json())
+
+
+def test_mobile_approve_without_force_surfaces_blocked_items(client):
+    # Regression for RV-01 candidate (b): approving without force_review_items on
+    # an item that still needs review must not look like unconditional success.
+    # The item stays blocked and the response must say so via blocked_item_ids.
+    tokens = _pair(client)
+    headers = _auth(tokens)
+    response = client.post(
+        "/api/v1/mobile/captures/batch",
+        headers=headers,
+        json={
+            "captures": [
+                {
+                    "client_capture_id": str(uuid.uuid4()),
+                    "text": "내일 고객 미팅",
+                    "reference_time": "2026-07-30T09:00:00+09:00",
+                }
+            ]
+        },
+    ).json()
+    plan_id = response["receipts"][0]["plan_id"]
+    plan = client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+    item = plan["items"][0]
+    assert item["needs_review"] is True
+
+    approve = client.post(
+        f"/api/v1/mobile/plans/{plan_id}/approve",
+        headers=headers,
+        json={
+            "item_ids": [item["id"]],
+            "expected_plan_revision": plan["revision"],
+        },
+    )
+    assert approve.status_code == 200, approve.text
+    body = approve.json()
+    assert body["items"][0]["state"] == "draft"
+    assert body["items"][0]["needs_review"] is True
+    assert body["blocked_item_ids"] == [item["id"]]
+
+
+def test_mobile_reject_clears_review_flag_and_drops_from_review_list(client):
+    # Regression for RV-01: 전체 제외 (reject) suffered the identical bug as
+    # approve -- reject_items() never cleared needs_review, so a rejected item
+    # stayed matched by the review-list filter forever, looking untouched.
+    tokens = _pair(client)
+    headers = _auth(tokens)
+    response = client.post(
+        "/api/v1/mobile/captures/batch",
+        headers=headers,
+        json={
+            "captures": [
+                {
+                    "client_capture_id": str(uuid.uuid4()),
+                    "text": "내일 고객 미팅",
+                    "reference_time": "2026-07-30T09:00:00+09:00",
+                }
+            ]
+        },
+    ).json()
+    plan_id = response["receipts"][0]["plan_id"]
+    plan = client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+    item = plan["items"][0]
+    assert item["needs_review"] is True
+    review_reason = item["review_reason"]
+
+    reject = client.post(
+        f"/api/v1/mobile/plans/{plan_id}/reject",
+        headers=headers,
+        json={
+            "item_ids": [item["id"]],
+            "reason": "iOS에서 제외",
+            "expected_plan_revision": plan["revision"],
+        },
+    )
+    assert reject.status_code == 200, reject.text
+    rejected_item = reject.json()["items"][0]
+    assert rejected_item["state"] == "rejected"
+    assert rejected_item["needs_review"] is False
+    assert rejected_item["review_reason"] == review_reason
+
+    review_after = client.get("/api/v1/mobile/review", headers=headers)
+    assert all(p["id"] != plan_id for p in review_after.json())
+
+
 def test_mobile_changes_cursor_and_activity(client):
     tokens = _pair(client)
     headers = _auth(tokens)

@@ -312,6 +312,16 @@ final class AppModel: ObservableObject {
     )
     replacePlan(updated)
     await refreshAll()
+    // The server can still leave items blocked (still needs review, no force
+    // override honored). A 200 response is not the same as "everything was
+    // approved" -- surface it instead of letting the request look like a no-op.
+    if !updated.blockedItemIds.isEmpty {
+      let titles = updated.items
+        .filter { updated.blockedItemIds.contains($0.id) }
+        .map(\.title)
+        .joined(separator: ", ")
+      lastError = "검토가 더 필요해 승인되지 않은 항목이 있습니다: \(titles)"
+    }
     return updated
   }
 

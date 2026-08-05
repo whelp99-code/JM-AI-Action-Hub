@@ -322,6 +322,31 @@ public struct ActionPlan: Codable, Sendable, Equatable, Identifiable {
   public let updatedAt: Date
   public let items: [ActionItem]
   public let inbox: Inbox?
+  /// Item ids the server left blocked (still `needs_review`, no force override) on the
+  /// approve call that produced this plan. Empty for every response that is not the
+  /// result of an approve request. Defaulted so older/partial payloads still decode.
+  public let blockedItemIds: [String]
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    id = try container.decode(String.self, forKey: .id)
+    inboxId = try container.decode(String.self, forKey: .inboxId)
+    status = try container.decode(String.self, forKey: .status)
+    parserName = try container.decode(String.self, forKey: .parserName)
+    summary = try container.decode(String.self, forKey: .summary)
+    referenceTime = try container.decode(Date.self, forKey: .referenceTime)
+    revision = try container.decode(Int.self, forKey: .revision)
+    createdAt = try container.decode(Date.self, forKey: .createdAt)
+    updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+    items = try container.decode([ActionItem].self, forKey: .items)
+    inbox = try container.decodeIfPresent(Inbox.self, forKey: .inbox)
+    blockedItemIds = try container.decodeIfPresent([String].self, forKey: .blockedItemIds) ?? []
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case id, inboxId, status, parserName, summary, referenceTime, revision, createdAt, updatedAt,
+      items, inbox, blockedItemIds
+  }
 }
 
 public struct ActionItemPatch: Encodable, Sendable, Equatable {

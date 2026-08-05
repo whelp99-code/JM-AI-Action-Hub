@@ -225,6 +225,10 @@ class PlanRead(BaseModel):
     updated_at: datetime
     items: list[ActionItemRead]
     inbox: InboxRead | None = None
+    # Populated only by approve_plan() when items were left blocked because they
+    # still need review and the caller did not force an override. Empty for every
+    # other endpoint that returns a PlanRead. See services/executor.py:approve_plan.
+    blocked_item_ids: list[str] = Field(default_factory=list)
 
 
 class ApprovalRequest(BaseModel):

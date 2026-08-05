@@ -128,9 +128,6 @@ def approve_plan(
                     payload={"reasons": structural_reasons},
                 )
             continue
-        item.state = ItemState.APPROVED.value
-        item.execution_error = None
-        approved += 1
         record_audit(
             db,
             entity_type="item",
@@ -139,6 +136,14 @@ def approve_plan(
             actor=actor,
             payload={"forced_review": force_review_items and item.needs_review},
         )
+        # A human explicitly approved this item, so the safety gate has done its
+        # job -- clear the flag so the item drops out of the review list. The
+        # structural/manual `review_reason` text is intentionally left in place
+        # as an audit trail of why it needed review in the first place.
+        item.needs_review = False
+        item.state = ItemState.APPROVED.value
+        item.execution_error = None
+        approved += 1
     if approved:
         plan.status = PlanStatus.APPROVED.value
     record_audit(
@@ -153,6 +158,10 @@ def approve_plan(
     refreshed = get_plan(db, plan_id)
     if not refreshed:
         raise RuntimeError("Plan missing after approval")
+    # Transient, non-persisted attribute: lets the API layer surface which items
+    # were silently blocked (needs_review + no force override) so a 200 response
+    # never looks like unconditional success. See schemas.PlanRead.blocked_item_ids.
+    refreshed.blocked_item_ids = blocked
     return refreshed
 
 
@@ -170,6 +179,10 @@ def reject_items(
     for item in plan.items:
         if item.id in selected and item.state not in TERMINAL_ITEM_STATES:
             item.state = ItemState.REJECTED.value
+            # Same reasoning as approve_plan(): an explicit human decision (here,
+            # exclusion) closes out the review, so the item must stop matching the
+            # needs_review OR draft review-list filter. review_reason is kept.
+            item.needs_review = False
             record_audit(
                 db,
                 entity_type="item",
