@@ -68,6 +68,82 @@ final class ModelCodingTests: XCTestCase {
     XCTAssertEqual(plan.blockedItemIds, [])
   }
 
+  /// P1-1: `JSONDecoder.keyDecodingStrategy = .convertFromSnakeCase` rewrites the *keys of a
+  /// decoded dictionary's values* too, not just struct property names -- so decoding
+  /// `notification_preferences` as `[String: Bool]` silently turned every
+  /// `dictionary["review_required"]` lookup into a permanent miss and the app always fell back
+  /// to the "everything on" default, no matter what the server actually stored. Every prior
+  /// fixture used `"notification_preferences":{}`, which can't distinguish "decoded correctly to
+  /// the default" from "decoded incorrectly and fell back to the default" -- this fixture uses
+  /// real, non-default values so a regression here fails loudly instead of silently.
+  func testMobileDeviceDecodesRealNotificationPreferenceValues() throws {
+    let data = Data(
+      #"{"id":"33333333-3333-4333-8333-333333333333","device_name":"iPhone","platform":"ios","hardware_model":"iPhone17,1","os_version":"26.5.2","app_version":"0.2.1","status":"active","scopes":["brief:read"],"token_version":1,"push_environment":"sandbox","notification_preferences":{"review_required":false,"ai_status":true,"follow_up_due":false,"deadline_risk":true,"connector_failure":false,"focus_ready":true,"focus_overrun":false},"last_seen_at":null,"revoked_at":null,"created_at":"2026-08-05T01:00:00Z","updated_at":"2026-08-05T01:00:00Z","push_registered":false}"#
+        .utf8)
+    let device = try ActionHubJSON.decoder().decode(MobileDevice.self, from: data)
+    XCTAssertEqual(device.notificationPreferences.reviewRequired, false)
+    XCTAssertEqual(device.notificationPreferences.aiStatus, true)
+    XCTAssertEqual(device.notificationPreferences.followUpDue, false)
+    XCTAssertEqual(device.notificationPreferences.deadlineRisk, true)
+    XCTAssertEqual(device.notificationPreferences.connectorFailure, false)
+    XCTAssertEqual(device.notificationPreferences.focusReady, true)
+    XCTAssertEqual(device.notificationPreferences.focusOverrun, false)
+  }
+
+  /// The values must also round-trip back out unchanged (encode -> decode), which is what a
+  /// save-then-reload of Settings actually exercises.
+  func testNotificationPreferencesRoundTripsThroughEncodeAndDecode() throws {
+    var preferences = NotificationPreferences()
+    preferences.reviewRequired = false
+    preferences.followUpDue = false
+    preferences.focusOverrun = false
+
+    let encoded = try ActionHubJSON.encoder().encode(preferences)
+    let json = try XCTUnwrap(JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+    XCTAssertEqual(json["review_required"] as? Bool, false)
+    XCTAssertEqual(json["ai_status"] as? Bool, true)
+    XCTAssertEqual(json["follow_up_due"] as? Bool, false)
+    XCTAssertEqual(json["focus_overrun"] as? Bool, false)
+
+    let decoded = try ActionHubJSON.decoder().decode(NotificationPreferences.self, from: encoded)
+    XCTAssertEqual(decoded, preferences)
+  }
+
+  /// A device that has never customized preferences (or an older server) can still send `{}`;
+  /// this must default rather than throw `keyNotFound`.
+  func testNotificationPreferencesDecodesEmptyObjectAsAllDefaultsTrue() throws {
+    let decoded = try ActionHubJSON.decoder().decode(
+      NotificationPreferences.self, from: Data("{}".utf8))
+    XCTAssertEqual(decoded, NotificationPreferences())
+  }
+
+  /// New server contract (docs/IMPROVEMENT_PLAN_V2.md §"서버 계약"): `ExecutionSummary` gains
+  /// `retrying`/`errors` so a 200 response from execute can no longer look like unconditional
+  /// success while the worker is still failing in the background.
+  func testExecutionSummaryDecodesRetryingAndErrors() throws {
+    let data = Data(
+      #"{"plan_id":"plan-1","plan_status":"partial","completed":0,"registered":1,"action_completed":0,"queued":1,"failed":0,"skipped_duplicate":0,"pending":0,"items":[],"retrying":1,"errors":[{"item_id":"item-1","title":"GPU 라이선스 확인","error":"connector timeout","attempts":2}]}"#
+        .utf8)
+    let summary = try ActionHubJSON.decoder().decode(ExecutionSummary.self, from: data)
+    XCTAssertEqual(summary.retrying, 1)
+    XCTAssertEqual(summary.errors.count, 1)
+    XCTAssertEqual(summary.errors.first?.itemId, "item-1")
+    XCTAssertEqual(summary.errors.first?.title, "GPU 라이선스 확인")
+    XCTAssertEqual(summary.errors.first?.error, "connector timeout")
+    XCTAssertEqual(summary.errors.first?.attempts, 2)
+  }
+
+  /// Older servers that predate this contract addition must still decode, defaulting to "no
+  /// retries, no errors" rather than failing the whole execute response.
+  func testExecutionSummaryDefaultsRetryingAndErrorsWhenAbsent() throws {
+    let data = Data(
+      #"{"plan_id":"plan-1","plan_status":"completed","completed":1,"registered":1,"action_completed":0,"queued":0,"failed":0,"skipped_duplicate":0,"pending":0,"items":[]}"#
+        .utf8)
+    let summary = try ActionHubJSON.decoder().decode(ExecutionSummary.self, from: data)
+    XCTAssertEqual(summary.retrying, 0)
+    XCTAssertEqual(summary.errors, [])
+  }
+
   /// A stored session must survive the encode/decode round trip used by the Keychain store.
   /// `convertToSnakeCase` and `convertFromSnakeCase` are not inverses for acronym-suffixed
   /// names, which silently broke session restore on every cold launch.

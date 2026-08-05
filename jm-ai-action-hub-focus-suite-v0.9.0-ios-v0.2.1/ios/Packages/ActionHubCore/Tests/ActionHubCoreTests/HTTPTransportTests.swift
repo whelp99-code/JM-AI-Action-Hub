@@ -24,6 +24,20 @@ private final class RequestRecordingURLProtocol: URLProtocol, @unchecked Sendabl
   override func stopLoading() {}
 }
 
+/// Simulates URLSession surfacing `URLError.cancelled` (pull-to-refresh gesture resolving,
+/// app backgrounding mid-request) the way `session.data(for:)` does when its owning task is
+/// cancelled.
+private final class CancellingURLProtocol: URLProtocol, @unchecked Sendable {
+  override class func canInit(with request: URLRequest) -> Bool { true }
+  override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+
+  override func startLoading() {
+    client?.urlProtocol(self, didFailWithError: URLError(.cancelled))
+  }
+
+  override func stopLoading() {}
+}
+
 final class HTTPTransportTests: XCTestCase {
   func testUserAgentUsesSemanticAppVersion() {
     XCTAssertEqual(
@@ -52,6 +66,25 @@ final class HTTPTransportTests: XCTestCase {
     let userAgent = try await requestUserAgent(appVersion: "0.9.0\n")
 
     XCTAssertEqual(userAgent, "JM-AI-Action-Hub-iOS/unknown")
+  }
+
+  /// P1-2: before this, every cancellation was wrapped as `.transport(...)`, which made the
+  /// cancellation filter in AppModel.handle(_:) structurally unreachable -- see
+  /// docs/IMPROVEMENT_PLAN_V2.md P1-2. `URLSessionTransport` must surface it as the distinct
+  /// `.cancelled` case instead.
+  func testURLSessionTransportSurfacesCancellationAsDistinctError() async throws {
+    let configuration = URLSessionConfiguration.ephemeral
+    configuration.protocolClasses = [CancellingURLProtocol.self]
+    let transport = URLSessionTransport(configuration: configuration, appVersion: "0.9.0")
+
+    do {
+      _ = try await transport.data(for: URLRequest(url: URL(string: "https://example.test/cancel")!))
+      XCTFail("expected ActionHubAPIError.cancelled")
+    } catch ActionHubAPIError.cancelled {
+      // expected
+    } catch {
+      XCTFail("expected ActionHubAPIError.cancelled, got \(error)")
+    }
   }
 
   private func requestUserAgent(appVersion: String?) async throws -> String? {

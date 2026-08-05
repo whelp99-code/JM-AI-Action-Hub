@@ -11,7 +11,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session, selectinload
 
 from ..connectors import ConnectorRegistry
-from ..models import ActionItem, ActionPlan, AuditEvent, ItemState
+from ..models import ActionItem, ActionPlan, AuditEvent
 from ..schemas import (
     ActionItemUpdate,
     ApprovalRequest,
@@ -25,7 +25,7 @@ from ..schemas import (
 )
 from ..security import require_api_key
 from ..services.brief import build_daily_brief
-from ..services.executor import approve_plan, execute_plan, reject_items, update_item
+from ..services.executor import approve_plan, build_execution_summary, execute_plan, reject_items, update_item
 from ..services.planner import create_plan, get_plan
 from .dependencies import get_db
 
@@ -179,35 +179,7 @@ def execute(
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    actual_completed = sum(x.state == ItemState.COMPLETED.value for x in plan.items)
-    registered_states = {
-        ItemState.REGISTERED.value,
-        ItemState.WAITING.value,
-        ItemState.DISPATCHED.value,
-        ItemState.RUNNING.value,
-        ItemState.NEEDS_INPUT.value,
-        ItemState.HUMAN_REVIEW.value,
-    }
-    registered = sum(x.state in registered_states for x in plan.items)
-    queued = sum(x.state in {ItemState.QUEUED.value, ItemState.EXECUTING.value} for x in plan.items)
-    failed = sum(x.state == ItemState.FAILED.value for x in plan.items)
-    duplicate = sum(x.state == ItemState.SKIPPED_DUPLICATE.value for x in plan.items)
-    rejected = sum(x.state == ItemState.REJECTED.value for x in plan.items)
-    pending = len(plan.items) - actual_completed - registered - queued - failed - duplicate - rejected
-    # ``completed`` is retained as the v0.1 compatibility count: successfully
-    # routed or locally completed. ``action_completed`` is the true completion.
-    return ExecutionSummary(
-        plan_id=plan.id,
-        plan_status=plan.status,
-        completed=registered + actual_completed,
-        registered=registered,
-        action_completed=actual_completed,
-        queued=queued,
-        failed=failed,
-        skipped_duplicate=duplicate,
-        pending=max(0, pending),
-        items=plan.items,
-    )
+    return build_execution_summary(db, plan)
 
 
 @api_router.get("/brief/today", response_model=DailyBrief)

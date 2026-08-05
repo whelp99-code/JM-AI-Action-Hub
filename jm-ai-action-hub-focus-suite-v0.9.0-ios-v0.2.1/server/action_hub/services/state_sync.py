@@ -35,6 +35,20 @@ TERMINAL_STATES = {
 }
 
 
+def clear_needs_review(item: ActionItem) -> None:
+    """Close out the review gate on an explicit state transition.
+
+    Single place for the fix applied across approve/reject/focus-complete/
+    day-close-cancel/followup-resolve/external-sync -- every caller that moves
+    an item into a state a human (or an authoritative external system) has
+    settled must stop matching the needs_review-based review list and badge
+    count. ``review_reason`` is intentionally preserved as an audit trail of
+    why the item needed review in the first place.
+    """
+
+    item.needs_review = False
+
+
 def canonical_external_id(
     provider: str,
     native_external_id: str | None,
@@ -205,6 +219,7 @@ def apply_external_state(
         item.state = ItemState.COMPLETED.value
         item.completed_at = external_updated_at or utcnow()
         item.completion_evidence = external_url or f"{provider}:{external_id}"
+        clear_needs_review(item)
     elif normalized in open_states:
         if item.state == ItemState.COMPLETED.value:
             _create_reopen_conflict(db, item, provider, normalized)
@@ -221,6 +236,7 @@ def apply_external_state(
     elif normalized in cancelled_states:
         item.state = ItemState.CANCELLED.value
         item.completed_at = external_updated_at or utcnow()
+        clear_needs_review(item)
     elif normalized in failed_states:
         item.state = ItemState.FAILED.value
         item.execution_error = f"External provider reported {normalized}"

@@ -44,6 +44,15 @@ public struct URLSessionTransport: HTTPTransport, @unchecked Sendable {
       return (data, http)
     } catch let error as ActionHubAPIError {
       throw error
+    } catch is CancellationError {
+      // Structured-concurrency cancellation (e.g. a `.task` torn down mid-request).
+      throw ActionHubAPIError.cancelled
+    } catch let urlError as URLError where urlError.code == .cancelled {
+      // URLSession cancellation (pull-to-refresh gesture resolving, app backgrounding). Before
+      // this case existed, every cancellation was wrapped as `.transport(...)`, which made it
+      // structurally impossible for callers to filter cancellation out of error handling --
+      // see AppModel.handle(_:).
+      throw ActionHubAPIError.cancelled
     } catch {
       throw ActionHubAPIError.transport(error.localizedDescription)
     }

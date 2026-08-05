@@ -10,6 +10,21 @@ struct PairingView: View {
     try? PairingPayload.parse(payload)
   }
 
+  /// `PairingPayload.parse` throws a specific Korean reason for every rejection (wrong scheme,
+  /// duplicate query items, non-UUID pairing id, malformed code, ...). Discarding it via `try?`
+  /// left users staring at a generic "유효하지 않습니다" no matter what was actually wrong.
+  private var parseErrorMessage: String? {
+    guard parsedPayload == nil,
+      !payload.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    else { return nil }
+    do {
+      _ = try PairingPayload.parse(payload)
+      return nil
+    } catch {
+      return error.localizedDescription
+    }
+  }
+
   var body: some View {
     NavigationStack {
       ScrollView {
@@ -51,8 +66,8 @@ struct PairingView: View {
             }
             .padding()
             .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
-          } else if !payload.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            Label("유효한 페어링 정보가 아닙니다.", systemImage: "exclamationmark.triangle")
+          } else if let parseErrorMessage {
+            Label(parseErrorMessage, systemImage: "exclamationmark.triangle")
               .font(.footnote)
               .foregroundStyle(.red)
           }

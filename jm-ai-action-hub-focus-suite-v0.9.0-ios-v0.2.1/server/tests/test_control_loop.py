@@ -37,6 +37,53 @@ def _create(client, text: str):
     return response.json()
 
 
+def test_apply_external_state_completed_and_cancelled_clear_needs_review(client):
+    # Regression for P1-4: apply_external_state()'s completed/cancelled
+    # branches moved the item to a terminal state but never cleared
+    # needs_review -- the same bug pattern fixed today for approve/reject, at
+    # the external-sync call site (state_sync.py, reached by both webhooks and
+    # the reconciliation poller).
+    from action_hub.services.mobile import list_review_plans
+    from action_hub.services.state_sync import apply_external_state
+
+    plan = _create(client, "repo:owner/repo 로그인 오류를 codex로 수정")
+    item_id = plan["items"][0]["id"]
+
+    with client.app.state.database.session_factory() as db:
+        item = db.get(ActionItem, item_id)
+        item.needs_review = True
+        item.review_reason = "테스트: 검토 필요"
+        db.commit()
+        assert any(p.id == plan["id"] for p in list_review_plans(db, 50))
+
+        item = db.get(ActionItem, item_id)
+        apply_external_state(db, item=item, provider="github", external_id="owner/repo#1", state="closed")
+        db.commit()
+        db.refresh(item)
+        assert item.state == "completed"
+        assert item.needs_review is False
+        assert item.review_reason == "테스트: 검토 필요"
+        assert all(p.id != plan["id"] for p in list_review_plans(db, 50))
+
+    with client.app.state.database.session_factory() as db:
+        item = db.get(ActionItem, item_id)
+        # Reset off the terminal COMPLETED state left by the first half of this
+        # test so the review-list membership check below actually exercises
+        # needs_review, not the (already-covered) terminal-state exclusion.
+        item.state = "registered"
+        item.needs_review = True
+        db.commit()
+        assert any(p.id == plan["id"] for p in list_review_plans(db, 50))
+
+        item = db.get(ActionItem, item_id)
+        apply_external_state(db, item=item, provider="github", external_id="owner/repo#1", state="deleted")
+        db.commit()
+        db.refresh(item)
+        assert item.state == "cancelled"
+        assert item.needs_review is False
+        assert all(p.id != plan["id"] for p in list_review_plans(db, 50))
+
+
 def _approve_execute(client, plan):
     client.post(f"/api/v1/plans/{plan['id']}/approve", json={"actor": "test"})
     response = client.post(f"/api/v1/plans/{plan['id']}/execute", json={"actor": "test"})

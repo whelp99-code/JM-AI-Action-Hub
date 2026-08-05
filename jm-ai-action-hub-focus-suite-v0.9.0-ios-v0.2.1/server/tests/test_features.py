@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 from action_hub.config import Settings
 from action_hub.main import create_app
 from action_hub.models import (
+    ActionItem,
     ActionType,
     AttentionState,
     Destination,
@@ -107,6 +108,45 @@ def test_followup_lifecycle_and_due_processing(client):
     assert resolved.status_code == 200
     refreshed = client.get(f"/api/v1/plans/{plan['id']}").json()["items"][0]
     assert refreshed["state"] == "human_review"
+
+
+def test_followup_resolved_clears_needs_review_and_drops_from_review_list(client):
+    # Regression for P1-4: resolve_followup()'s "resolved" branch moved the
+    # item to COMPLETED but never cleared needs_review, so it stayed matched by
+    # the review-list filter forever -- the same bug pattern already fixed
+    # today for approve/reject, at a different call site.
+    from action_hub.services.mobile import list_review_plans
+
+    plan = _create(client, "협력사 회신 확인")
+    item = plan["items"][0]
+    with client.app.state.database.session_factory() as db:
+        row = db.get(ActionItem, item["id"])
+        row.needs_review = True
+        row.review_reason = "테스트: 검토 필요"
+        db.commit()
+
+        assert any(p.id == plan["id"] for p in list_review_plans(db, 50))
+
+    past = (datetime.now(UTC) - timedelta(minutes=1)).isoformat()
+    created = client.post(
+        f"/api/v1/items/{item['id']}/followups",
+        json={"waiting_for": "협력사", "channel": "email", "follow_up_at": past},
+    )
+    assert created.status_code == 200, created.text
+    followup = created.json()
+
+    resolved = client.post(
+        f"/api/v1/followups/{followup['id']}/resolve",
+        json={"state": "resolved", "note": "완료"},
+    )
+    assert resolved.status_code == 200, resolved.text
+    refreshed = client.get(f"/api/v1/plans/{plan['id']}").json()["items"][0]
+    assert refreshed["state"] == "completed"
+    assert refreshed["needs_review"] is False
+    assert refreshed["review_reason"] == "테스트: 검토 필요"
+
+    with client.app.state.database.session_factory() as db:
+        assert all(p.id != plan["id"] for p in list_review_plans(db, 50))
 
 
 def test_decision_plan_detects_capacity_overload(client):

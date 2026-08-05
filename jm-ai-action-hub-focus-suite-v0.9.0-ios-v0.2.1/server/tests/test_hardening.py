@@ -363,6 +363,34 @@ def test_control_and_error_endpoints_are_safe(client):
     assert client.post("/api/v1/webhooks/unknown", content=b"{}").status_code == 422
 
 
+def test_concurrent_update_conflict_is_reported_as_409_not_500(client, monkeypatch):
+    # Regression for S9: ActionPlan/ActionItem/FocusSession all use
+    # version_id_col=revision for optimistic locking (models.py), but there was
+    # no StaleDataError handling anywhere in the codebase, so a genuine write
+    # race between two overlapping requests fell through to the catch-all
+    # Exception handler and came back as an unhelpful 500. Forcing the service
+    # call to raise StaleDataError isolates the exception-mapping behavior
+    # (main.py's dedicated handler) from the harder problem of deterministically
+    # reproducing a real concurrent write race in a single-threaded test.
+    from sqlalchemy.orm.exc import StaleDataError
+
+    import action_hub.api.routes as routes_module
+
+    def _raise_stale(*args, **kwargs):
+        raise StaleDataError("UPDATE statement matched 0 rows")
+
+    monkeypatch.setattr(routes_module, "update_item", _raise_stale)
+
+    response = client.patch(
+        "/api/v1/plans/plan-does-not-matter/items/item-does-not-matter",
+        json={"title": "x"},
+    )
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "concurrent_update"
+    assert detail["message"]
+
+
 def test_connector_health_probe_in_dry_run(client):
     response = client.get("/api/v1/connectors/status?probe=true")
     assert response.status_code == 200

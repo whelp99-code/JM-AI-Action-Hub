@@ -15,6 +15,7 @@ struct FocusSessionView: View {
       }
     }
     .padding()
+    .refreshable { await model.refreshAllDetached() }
   }
 
   private func activeSession(_ session: FocusSession) -> some View {

@@ -46,7 +46,7 @@ public struct MobileDevice: Codable, Sendable, Equatable, Identifiable {
   public let scopes: [String]
   public let tokenVersion: Int
   public let pushEnvironment: String
-  public let notificationPreferences: [String: Bool]
+  public let notificationPreferences: NotificationPreferences
   public let lastSeenAt: Date?
   public let revokedAt: Date?
   public let createdAt: Date
@@ -614,6 +614,14 @@ public struct PlanExecuteRequest: Codable, Sendable, Equatable {
   }
 }
 
+public struct ExecutionError: Codable, Sendable, Equatable, Identifiable {
+  public var id: String { itemId }
+  public let itemId: String
+  public let title: String
+  public let error: String
+  public let attempts: Int
+}
+
 public struct ExecutionSummary: Codable, Sendable, Equatable {
   public let planId: String
   public let planStatus: String
@@ -625,6 +633,34 @@ public struct ExecutionSummary: Codable, Sendable, Equatable {
   public let skippedDuplicate: Int
   public let pending: Int
   public let items: [ActionItem]
+  /// Queued/executing items that still carry an unresolved execution error (worker retrying
+  /// after a transient failure). Absent on older servers; defaults to 0 so a 200 response never
+  /// silently reads as fully successful while work is actually still failing in the background.
+  public let retrying: Int
+  /// Up to 20 items with a recorded execution error. Same backward-compat reasoning as
+  /// `retrying`.
+  public let errors: [ExecutionError]
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    planId = try container.decode(String.self, forKey: .planId)
+    planStatus = try container.decode(String.self, forKey: .planStatus)
+    completed = try container.decode(Int.self, forKey: .completed)
+    registered = try container.decode(Int.self, forKey: .registered)
+    actionCompleted = try container.decode(Int.self, forKey: .actionCompleted)
+    queued = try container.decode(Int.self, forKey: .queued)
+    failed = try container.decode(Int.self, forKey: .failed)
+    skippedDuplicate = try container.decode(Int.self, forKey: .skippedDuplicate)
+    pending = try container.decode(Int.self, forKey: .pending)
+    items = try container.decode([ActionItem].self, forKey: .items)
+    retrying = try container.decodeIfPresent(Int.self, forKey: .retrying) ?? 0
+    errors = try container.decodeIfPresent([ExecutionError].self, forKey: .errors) ?? []
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case planId, planStatus, completed, registered, actionCompleted, queued, failed,
+      skippedDuplicate, pending, items, retrying, errors
+  }
 }
 
 public struct CaptureInput: Codable, Sendable, Equatable, Identifiable {
@@ -702,21 +738,42 @@ public struct PushTokenRequest: Codable, Sendable, Equatable {
   }
 }
 
+/// Mirrors the server's 7 notification kinds exactly (`server/action_hub/schemas.py`). Decoded
+/// and encoded as a plain struct -- not a `[String: Bool]` dictionary -- because
+/// `JSONDecoder.keyDecodingStrategy = .convertFromSnakeCase` rewrites dictionary *values'* keys
+/// too, which silently turned every lookup by snake_case key into a permanent miss (P1-1). Only
+/// 3 of the 7 kinds are actually published by the server today; the rest round-trip so a save
+/// never resets them, but the UI hides the ones nothing ever sends (see SettingsView).
 public struct NotificationPreferences: Codable, Sendable, Equatable {
   public var reviewRequired = true
   public var aiStatus = true
   public var followUpDue = true
   public var deadlineRisk = true
   public var connectorFailure = true
+  public var focusReady = true
+  public var focusOverrun = true
 
   public init() {}
 
-  public init(dictionary: [String: Bool]) {
-    reviewRequired = dictionary["review_required"] ?? true
-    aiStatus = dictionary["ai_status"] ?? true
-    followUpDue = dictionary["follow_up_due"] ?? true
-    deadlineRisk = dictionary["deadline_risk"] ?? true
-    connectorFailure = dictionary["connector_failure"] ?? true
+  // Swift's synthesized `Decodable` init requires every key present regardless of a property's
+  // declared default -- it does NOT fall back to the default for a missing key unless the
+  // property type is Optional. A device that has never customized preferences (or an older/newer
+  // server) can legitimately send `"notification_preferences": {}` or a subset of the 7 fields,
+  // so this must decode leniently instead of throwing `keyNotFound`.
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    reviewRequired = try container.decodeIfPresent(Bool.self, forKey: .reviewRequired) ?? true
+    aiStatus = try container.decodeIfPresent(Bool.self, forKey: .aiStatus) ?? true
+    followUpDue = try container.decodeIfPresent(Bool.self, forKey: .followUpDue) ?? true
+    deadlineRisk = try container.decodeIfPresent(Bool.self, forKey: .deadlineRisk) ?? true
+    connectorFailure = try container.decodeIfPresent(Bool.self, forKey: .connectorFailure) ?? true
+    focusReady = try container.decodeIfPresent(Bool.self, forKey: .focusReady) ?? true
+    focusOverrun = try container.decodeIfPresent(Bool.self, forKey: .focusOverrun) ?? true
+  }
+
+  private enum CodingKeys: String, CodingKey {
+    case reviewRequired, aiStatus, followUpDue, deadlineRisk, connectorFailure, focusReady,
+      focusOverrun
   }
 }
 

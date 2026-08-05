@@ -1,5 +1,5 @@
 {
-  "archiveSha256": "5ad699da8c6d588c027b479772a843f2050f56d0c341b8f1f79d1b0c89b4c513",
+  "archiveSha256": "9723a1ed6a7a57daae17bc623f2fea6097e8e84f46b5e8acc9215578b1ce12ba",
   "commandContracts": [
     {
       "command": "action-hub migrate (temporary SQLite)",
@@ -19,9 +19,9 @@
   ],
   "manifestsEqual": true,
   "marker": "restored",
-  "postRestoreManifestSha256": "a737f73e0a2acb01a6dcaa5dd088159f35dee5b798e2676fffe25936deb700da",
-  "preBackupManifestSha256": "a737f73e0a2acb01a6dcaa5dd088159f35dee5b798e2676fffe25936deb700da",
+  "postRestoreManifestSha256": "702dfeabf1a11d9ecd8681abeefef1e4335075f674815eb08b244a203c44efe6",
+  "preBackupManifestSha256": "702dfeabf1a11d9ecd8681abeefef1e4335075f674815eb08b244a203c44efe6",
   "schema": "0005_decision_focus_foundation",
   "schemaVersion": 1,
-  "tempPath": "/var/folders/f0/tbqwy3mn7rj7vy2j7ts0gxhr0000gn/T/tmp.hsoZLv0ZqV"
+  "tempPath": "/var/folders/f0/tbqwy3mn7rj7vy2j7ts0gxhr0000gn/T/tmp.46426EiLT6"
 }

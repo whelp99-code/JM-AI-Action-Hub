@@ -20,6 +20,17 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     }
   }
 
+  /// `requestAuthorization` silently no-ops once the user has already denied the system
+  /// prompt -- iOS only asks once. Callers use this to detect that case and offer a path to
+  /// Settings instead of a button that visibly does nothing.
+  func currentAuthorizationStatus() async -> UNAuthorizationStatus {
+    await withCheckedContinuation { continuation in
+      UNUserNotificationCenter.current().getNotificationSettings { settings in
+        continuation.resume(returning: settings.authorizationStatus)
+      }
+    }
+  }
+
   /// APNs device tokens can change. Register again on every connected app launch
   /// without re-prompting users who have not granted notification permission.
   func registerIfAuthorized() {

@@ -25,6 +25,7 @@ final class AppModel: ObservableObject {
   @Published private(set) var deadLetters: [OfflineCaptureDeadLetter] = []
   @Published var notificationPreferences = NotificationPreferences()
   @Published var isRefreshing = false
+  @Published private(set) var isStarting = false
   @Published var lastError: String?
   @Published var selectedTab: AppTab = .today
   @Published var focusRequestedSection: String?
@@ -51,6 +52,11 @@ final class AppModel: ObservableObject {
   }
 
   func start() async {
+    // Guards the foreground (`scenePhase == .active`) sync path against racing this same sync
+    // work on cold launch -- `.task { start() }` and the initial `.active` transition otherwise
+    // fire together and double every request. See ActionHubApp.swift.
+    isStarting = true
+    defer { isStarting = false }
     do {
       let restored = try await session.restore()
       guard let restored else {
@@ -59,8 +65,7 @@ final class AppModel: ObservableObject {
         return
       }
       connectionState = .connected(deviceName: restored.device.deviceName)
-      notificationPreferences = NotificationPreferences(
-        dictionary: restored.device.notificationPreferences)
+      notificationPreferences = restored.device.notificationPreferences
       NotificationManager.shared.registerIfAuthorized()
       await refreshAll()
       handlePendingSystemRoute()
@@ -90,13 +95,13 @@ final class AppModel: ObservableObject {
         )
       )
       connectionState = .connected(deviceName: device.deviceName)
-      notificationPreferences = NotificationPreferences(dictionary: device.notificationPreferences)
+      notificationPreferences = device.notificationPreferences
       lastError = nil
       await flushCaptures()
       await refreshAll()
       NotificationManager.shared.requestAuthorizationAndRegister()
     } catch {
-      lastError = error.localizedDescription
+      handle(error)
       connectionState = .disconnected
     }
   }
@@ -121,13 +126,13 @@ final class AppModel: ObservableObject {
     -> MobileDevice
   {
     let device = try await session.updateNotificationPreferences(preferences)
-    notificationPreferences = NotificationPreferences(dictionary: device.notificationPreferences)
+    notificationPreferences = device.notificationPreferences
     return device
   }
 
   func disconnect() async {
     do { try await session.disconnect(revokeServer: true) } catch {
-      lastError = error.localizedDescription
+      handle(error)
     }
     dashboard = nil
     reviewPlans = []
@@ -151,6 +156,11 @@ final class AppModel: ObservableObject {
 
   func refreshAll() async {
     guard case .connected = connectionState else { return }
+    // Re-entrancy guard: every scenePhase == .active transition (including the one right
+    // after a system sheet -- permission dialog, share sheet, camera -- closes) calls this.
+    // Without the guard, overlapping calls raced and the response that finished last could
+    // overwrite fresher state with stale data.
+    guard !isRefreshing else { return }
     isRefreshing = true
     defer { isRefreshing = false }
     do {
@@ -191,7 +201,7 @@ final class AppModel: ObservableObject {
       if case .connected = connectionState { await flushCaptures() }
       return true
     } catch {
-      lastError = error.localizedDescription
+      handle(error)
       return false
     }
   }
@@ -212,7 +222,7 @@ final class AppModel: ObservableObject {
         try appGroupStore?.writeWidgetSnapshot(WidgetSnapshot(dashboard: dashboard))
       }
     } catch {
-      lastError = error.localizedDescription
+      handle(error)
       await updatePendingCount()
     }
   }
@@ -227,7 +237,7 @@ final class AppModel: ObservableObject {
       deadLetters = try await captureQueue.deadLetters(limit: 100)
       deadLetterCaptureCount = try await captureQueue.deadLetterCount()
     } catch {
-      lastError = error.localizedDescription
+      handle(error)
     }
   }
 
@@ -254,9 +264,12 @@ final class AppModel: ObservableObject {
       }
       lastError = nil
     } catch {
-      lastError = error.localizedDescription
+      handle(error)
     }
-    await updatePendingCount()
+    // Restoring puts the captures back on the send queue -- without this, "모두 복원" looked
+    // like it worked (the dead-letter count dropped) but nothing was actually sent until the
+    // next unrelated sync.
+    await flushCaptures()
     await refreshDeadLetters()
   }
 
@@ -284,7 +297,7 @@ final class AppModel: ObservableObject {
       }
       lastError = nil
     } catch {
-      lastError = error.localizedDescription
+      handle(error)
     }
     await updatePendingCount()
     await refreshDeadLetters()
@@ -298,30 +311,32 @@ final class AppModel: ObservableObject {
   {
     let updated = try await session.updateItem(planId: planId, itemId: itemId, patch: patch)
     replacePlan(updated)
+    // Every other action (approve/reject/execute/classify/...) refreshes derived state
+    // (badges, list filters) after mutating. This one didn't, so turning off "계속 검토
+    // 필요" and saving left the review badge and list showing the stale count.
+    await refreshAll()
     return updated
   }
 
-  func approve(plan: ActionPlan, itemIds: [String]? = nil) async throws -> ActionPlan {
+  /// `forceReviewItems` defaults to `false` -- the server's structural review gate (e.g. a
+  /// calendar item with no start time) exists to stop exactly the kind of silent-failure
+  /// approval that shipped before this fix. When the server leaves items blocked
+  /// (`blockedItemIds` non-empty on the returned plan), the caller is responsible for showing
+  /// the block reason to the user and only retrying with `forceReviewItems: true` after an
+  /// explicit user choice -- see PlanDetailView.
+  func approve(plan: ActionPlan, itemIds: [String]? = nil, forceReviewItems: Bool = false)
+    async throws -> ActionPlan
+  {
     let updated = try await session.approve(
       planId: plan.id,
       request: PlanApprovalRequest(
         itemIds: itemIds,
-        forceReviewItems: true,
+        forceReviewItems: forceReviewItems,
         expectedPlanRevision: plan.revision
       )
     )
     replacePlan(updated)
     await refreshAll()
-    // The server can still leave items blocked (still needs review, no force
-    // override honored). A 200 response is not the same as "everything was
-    // approved" -- surface it instead of letting the request look like a no-op.
-    if !updated.blockedItemIds.isEmpty {
-      let titles = updated.items
-        .filter { updated.blockedItemIds.contains($0.id) }
-        .map(\.title)
-        .joined(separator: ", ")
-      lastError = "검토가 더 필요해 승인되지 않은 항목이 있습니다: \(titles)"
-    }
     return updated
   }
 
@@ -462,6 +477,7 @@ final class AppModel: ObservableObject {
     do {
       _ = try await session.registerPushToken(token, environment: AppConfiguration.pushEnvironment)
     } catch {
+      guard !Self.isCancellation(error) else { return }
       lastError = "푸시 토큰 등록 실패: \(error.localizedDescription)"
     }
   }
@@ -527,15 +543,28 @@ final class AppModel: ObservableObject {
     deadLetters = (try? await captureQueue.deadLetters(limit: 100)) ?? []
   }
 
-  private func handle(_ error: Error) {
+  /// Not private: Views that catch their own errors (PlanDetailView, DayCloseView,
+  /// SettingsView, ...) route through this too, so the cancellation filter below actually
+  /// applies everywhere instead of only to the call sites inside AppModel itself.
+  func handle(_ error: Error) {
     if case ActionHubAPIError.revoked = error {
       connectionState = .disconnected
     }
     // A cancelled request is the result of the user or the system abandoning the work, not a
     // failure worth reporting; showing it reads as "네트워크 오류: cancelled".
-    if error is CancellationError { return }
-    if let urlError = error as? URLError, urlError.code == .cancelled { return }
+    if Self.isCancellation(error) { return }
     lastError = error.localizedDescription
+  }
+
+  /// `HTTPTransport` now surfaces cancellation as `ActionHubAPIError.cancelled` (see
+  /// HTTPTransport.swift), but structured-concurrency cancellation can still reach a caller
+  /// directly as `CancellationError` without ever going through the transport, so both are
+  /// checked here.
+  static func isCancellation(_ error: Error) -> Bool {
+    if error is CancellationError { return true }
+    if case ActionHubAPIError.cancelled = error { return true }
+    if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+    return false
   }
 
   private static var hardwareModel: String {

@@ -62,6 +62,7 @@ struct DayCloseView: View {
       .padding()
       .background(.bar)
     }
+    .refreshable { await model.refreshAllDetached() }
     .task { await model.loadFocusWeeklyReport() }
   }
 
@@ -90,6 +91,6 @@ struct DayCloseView: View {
       decisions = [:]
       reasons = [:]
       await model.loadFocusWeeklyReport()
-    } catch { model.lastError = error.localizedDescription }
+    } catch { model.handle(error) }
   }
 }

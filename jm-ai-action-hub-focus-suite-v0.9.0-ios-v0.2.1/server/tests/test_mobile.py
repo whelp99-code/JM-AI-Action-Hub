@@ -16,6 +16,8 @@ from sqlalchemy import inspect, select
 from action_hub.config import Settings
 from action_hub.main import create_app
 from action_hub.models import (
+    ActionItem,
+    ItemState,
     MobileCapture,
     MobileDevice,
     MobilePairingSession,
@@ -1123,3 +1125,189 @@ def test_pairing_qr_svg_and_ascii(tmp_path):
     rendered = output.getvalue()
     assert len(rendered.splitlines()) > 10
     assert "█" in rendered
+
+
+def test_mobile_execute_reports_retrying_items_and_errors_instead_of_hiding_failure(settings):
+    # Same regression as test_api_workflow.py's plain /api/v1 coverage, but
+    # through the mobile router. P0-2 requires api/mobile.py and api/routes.py
+    # to share one execution-summary implementation (build_execution_summary)
+    # so a fix to one cannot silently drift from the other, as they already had
+    # (mobile lacked the failed/pending accounting the plain API had).
+    live_settings = settings.model_copy(update={"execution_mode": "live"})
+    with TestClient(create_app(live_settings)) as live_client:
+        live_client.headers["X-Action-Hub-Key"] = live_settings.api_key
+        tokens = _pair(live_client)
+        headers = _auth(tokens)
+        capture = live_client.post(
+            "/api/v1/mobile/captures/batch",
+            headers=headers,
+            json={
+                "captures": [
+                    {
+                        "client_capture_id": str(uuid.uuid4()),
+                        "text": "repo:owner/repo 로그인 오류를 codex로 수정",
+                        "reference_time": "2026-07-30T09:00:00+09:00",
+                    }
+                ]
+            },
+        ).json()
+        plan_id = capture["receipts"][0]["plan_id"]
+        plan = live_client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+        item = plan["items"][0]
+        assert item["destination"] == "github"
+        approve = live_client.post(
+            f"/api/v1/mobile/plans/{plan_id}/approve",
+            headers=headers,
+            json={"expected_plan_revision": plan["revision"]},
+        )
+        assert approve.status_code == 200, approve.text
+        execute = live_client.post(
+            f"/api/v1/mobile/plans/{plan_id}/execute",
+            headers=headers,
+            json={"expected_plan_revision": approve.json()["revision"]},
+        )
+
+    assert execute.status_code == 200, execute.text
+    body = execute.json()
+    assert body["failed"] == 0
+    assert body["retrying"] == 1
+    assert len(body["errors"]) == 1
+    assert body["errors"][0]["item_id"] == item["id"]
+    assert "GITHUB_TOKEN" in body["errors"][0]["error"]
+
+
+def test_dashboard_review_count_matches_plan_unit_not_item_unit(client):
+    # Regression for S7: the badge (review_count) counted ActionItem rows while
+    # the list it links to (list_review_plans) returns one row per ActionPlan.
+    # A plan with 2 needs_review items made the badge read 2 while the list the
+    # user taps into showed 1 plan -- individually correct per unit, but reads
+    # as a bug side by side. Badge is aligned to the list's plan unit.
+    tokens = _pair(client)
+    headers = _auth(tokens)
+    capture = client.post(
+        "/api/v1/mobile/captures/batch",
+        headers=headers,
+        json={
+            "captures": [
+                {
+                    "client_capture_id": str(uuid.uuid4()),
+                    "text": "내일 고객 미팅\n모레 협력사 미팅",
+                    "reference_time": "2026-07-30T09:00:00+09:00",
+                }
+            ]
+        },
+    ).json()
+    plan_id = capture["receipts"][0]["plan_id"]
+    plan = client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+    assert len(plan["items"]) == 2
+    assert all(item["needs_review"] for item in plan["items"])
+
+    review = client.get("/api/v1/mobile/review", headers=headers)
+    assert review.status_code == 200
+    assert len(review.json()) == 1
+
+    dashboard = client.get("/api/v1/mobile/dashboard", headers=headers)
+    assert dashboard.status_code == 200
+    assert dashboard.json()["review_count"] == 1
+
+
+def test_review_list_and_badge_exclude_terminal_states_even_if_needs_review_lingers(client):
+    # Regression for P1-4's root cause: the review-list filter and the
+    # dashboard badge only checked needs_review/DRAFT and never excluded
+    # terminal states. Approve/reject were fixed today to clear needs_review
+    # explicitly, but that leaves every future caller one missed line away
+    # from the same bug. The filter itself must exclude terminal states
+    # regardless of whether the flag was cleared.
+    tokens = _pair(client)
+    headers = _auth(tokens)
+    capture = client.post(
+        "/api/v1/mobile/captures/batch",
+        headers=headers,
+        json={
+            "captures": [
+                {
+                    "client_capture_id": str(uuid.uuid4()),
+                    "text": "내일 고객 미팅",
+                    "reference_time": "2026-07-30T09:00:00+09:00",
+                }
+            ]
+        },
+    ).json()
+    plan_id = capture["receipts"][0]["plan_id"]
+    plan = client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+    item = plan["items"][0]
+    assert item["needs_review"] is True
+
+    with client.app.state.database.session_factory() as db:
+        row = db.get(ActionItem, item["id"])
+        row.state = ItemState.CANCELLED.value
+        db.commit()
+
+    review_after = client.get("/api/v1/mobile/review", headers=headers)
+    assert all(p["id"] != plan_id for p in review_after.json())
+
+    dashboard = client.get("/api/v1/mobile/dashboard", headers=headers)
+    assert dashboard.json()["review_count"] == 0
+
+
+def test_review_list_limit_is_plan_scoped_not_join_row_scoped(client):
+    # Regression for S8: list_review_plans() joined ActionPlan to ActionItem
+    # and applied LIMIT to that joined query, so LIMIT bounded item rows, not
+    # distinct plans. A single busy plan with >= limit needs_review items could
+    # exhaust the limit by itself and silently drop every other plan from the
+    # response.
+    from action_hub.models import ActionPlan, InboxEntry
+    from action_hub.services import mobile as mobile_service
+
+    with client.app.state.database.session_factory() as db:
+        busy_inbox = InboxEntry(raw_text="busy", timezone="Asia/Seoul", fingerprint="busy-inbox".ljust(64, "0"))
+        db.add(busy_inbox)
+        db.flush()
+        busy_plan = ActionPlan(inbox_id=busy_inbox.id, reference_time=utcnow())
+        db.add(busy_plan)
+        db.flush()
+        busy_plan_id = busy_plan.id
+        for i in range(5):
+            db.add(
+                ActionItem(
+                    plan_id=busy_plan_id,
+                    item_type="todo",
+                    destination="none",
+                    title=f"busy {i}",
+                    fingerprint=f"busy-item-{i}".ljust(64, "0"),
+                    needs_review=True,
+                    review_reason="test",
+                )
+            )
+
+        other_plan_ids = []
+        for j in range(2):
+            inbox = InboxEntry(
+                raw_text=f"other{j}", timezone="Asia/Seoul", fingerprint=f"other-inbox-{j}".ljust(64, "0")
+            )
+            db.add(inbox)
+            db.flush()
+            plan = ActionPlan(inbox_id=inbox.id, reference_time=utcnow())
+            db.add(plan)
+            db.flush()
+            other_plan_ids.append(plan.id)
+            db.add(
+                ActionItem(
+                    plan_id=plan.id,
+                    item_type="todo",
+                    destination="none",
+                    title=f"other {j}",
+                    fingerprint=f"other-item-{j}".ljust(64, "0"),
+                    needs_review=True,
+                    review_reason="test",
+                )
+            )
+        db.commit()
+
+        plans = mobile_service.list_review_plans(db, limit=3)
+        returned_ids = {plan.id for plan in plans}
+
+    assert len(plans) == 3
+    assert busy_plan_id in returned_ids
+    assert other_plan_ids[0] in returned_ids
+    assert other_plan_ids[1] in returned_ids

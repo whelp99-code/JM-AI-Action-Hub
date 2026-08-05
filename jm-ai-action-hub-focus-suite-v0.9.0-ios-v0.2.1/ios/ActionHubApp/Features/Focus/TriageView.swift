@@ -28,6 +28,7 @@ struct TriageView: View {
       }
       .padding()
     }
+    .refreshable { await model.refreshAllDetached() }
   }
 
   private var header: some View {

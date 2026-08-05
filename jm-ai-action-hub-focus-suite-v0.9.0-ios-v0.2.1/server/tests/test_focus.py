@@ -590,3 +590,74 @@ def test_mobile_focus_api_scope_and_change_stream(client: TestClient) -> None:
     assert "attention.committed" in event_types
     assert "focus.started" in event_types
     assert "focus.abandon" in event_types
+
+
+def test_focus_session_complete_clears_needs_review_and_drops_from_review_list(client: TestClient) -> None:
+    # Regression for P1-4: act_on_focus_session()'s "complete" branch with
+    # mark_action_completed moved the item to COMPLETED but never cleared
+    # needs_review -- the same bug pattern fixed today for approve/reject
+    # (RV-01), at a different call site (focus.py, not executor.py).
+    from action_hub.services.mobile import list_review_plans
+
+    plan = _plan(client, "제안서 검토 30분")
+    item_id = plan["items"][0]["id"]
+    with client.app.state.database.session_factory() as db:
+        row = db.get(ActionItem, item_id)
+        row.needs_review = True
+        row.review_reason = "테스트: 검토 필요"
+        db.commit()
+        assert any(p.id == plan["id"] for p in list_review_plans(db, 50))
+
+    started = client.post(
+        "/api/v1/focus/sessions",
+        json={"action_item_id": item_id, "planned_minutes": 25},
+    )
+    assert started.status_code == 201, started.text
+    session = started.json()
+
+    completed = client.patch(
+        f"/api/v1/focus/sessions/{session['id']}",
+        json={
+            "action": "complete",
+            "mark_action_completed": True,
+            "completion_note": "완료",
+            "expected_revision": session["revision"],
+        },
+    )
+    assert completed.status_code == 200, completed.text
+
+    with client.app.state.database.session_factory() as db:
+        row = db.get(ActionItem, item_id)
+        assert row.state == ItemState.COMPLETED.value
+        assert row.needs_review is False
+        assert row.review_reason == "테스트: 검토 필요"
+        assert all(p.id != plan["id"] for p in list_review_plans(db, 50))
+
+
+def test_close_day_cancel_clears_needs_review_and_drops_from_review_list(client: TestClient) -> None:
+    # Regression for P1-4: close_day()'s "cancel" decision moved the item to
+    # CANCELLED but never cleared needs_review, the same bug pattern at a third
+    # call site.
+    from action_hub.services.mobile import list_review_plans
+
+    plan = _plan(client, "가치 없는 업무")
+    item_id = plan["items"][0]["id"]
+    with client.app.state.database.session_factory() as db:
+        row = db.get(ActionItem, item_id)
+        row.needs_review = True
+        row.review_reason = "테스트: 검토 필요"
+        db.commit()
+        assert any(p.id == plan["id"] for p in list_review_plans(db, 50))
+
+    result = client.post(
+        "/api/v1/focus/day-close",
+        json={"decisions": [{"action_item_id": item_id, "decision": "cancel", "reason": "가치 없음"}]},
+    )
+    assert result.status_code == 200, result.text
+
+    with client.app.state.database.session_factory() as db:
+        row = db.get(ActionItem, item_id)
+        assert row.state == ItemState.CANCELLED.value
+        assert row.needs_review is False
+        assert row.review_reason == "테스트: 검토 필요"
+        assert all(p.id != plan["id"] for p in list_review_plans(db, 50))

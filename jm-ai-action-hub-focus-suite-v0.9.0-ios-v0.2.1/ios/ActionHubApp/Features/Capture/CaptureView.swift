@@ -8,6 +8,10 @@ struct CaptureView: View {
   @State private var text = ""
   @State private var isSubmitting = false
   @FocusState private var focused: Bool
+  /// The value of `text` the last time it was set from a speech partial result. Used to detect
+  /// a manual edit made mid-recording: if `text` has drifted from this, the user typed
+  /// something, and the next partial result must not silently overwrite it.
+  @State private var lastAppliedTranscript = ""
 
   var body: some View {
     NavigationStack {
@@ -37,7 +41,12 @@ struct CaptureView: View {
 
           Button {
             Task {
-              if speech.isRecording { speech.stop() } else { await speech.start() }
+              if speech.isRecording {
+                speech.stop()
+              } else {
+                lastAppliedTranscript = text
+                await speech.start()
+              }
             }
           } label: {
             Label(
@@ -83,7 +92,11 @@ struct CaptureView: View {
       }
       .onChange(of: speech.transcript) { _, value in
         guard !value.isEmpty else { return }
+        // If `text` no longer matches the last partial result we wrote, the user edited it by
+        // hand since -- do not stomp that edit with the next partial result.
+        guard text == lastAppliedTranscript else { return }
         text = value
+        lastAppliedTranscript = value
       }
       .onAppear { focused = true }
       .onDisappear { speech.stop() }

@@ -51,6 +51,7 @@ from ..models import (
 from .audit import record_audit
 from .followups import ensure_followup
 from .metrics import record_metric
+from .state_sync import clear_needs_review
 
 TERMINAL_STATES = {
     ItemState.COMPLETED.value,
@@ -833,6 +834,7 @@ def update_focus_session(
             item.completed_at = now
             item.completion_evidence = request.completion_note or "Focus session completed"
             item.attention_state = AttentionState.COMPLETED.value
+            clear_needs_review(item)
         else:
             today = datetime.now(ZoneInfo(settings.timezone)).date()
             committed_today = any(
@@ -937,6 +939,7 @@ def close_day(
         elif decision.decision == "cancel":
             item.state = ItemState.CANCELLED.value
             item.attention_state = AttentionState.SKIPPED.value
+            clear_needs_review(item)
             result = {"state": item.state}
         elif decision.decision == "waiting":
             if not decision.waiting_for or not decision.follow_up_at:

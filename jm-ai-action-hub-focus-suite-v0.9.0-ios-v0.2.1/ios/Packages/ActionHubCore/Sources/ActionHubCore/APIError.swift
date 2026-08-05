@@ -18,6 +18,10 @@ public enum ActionHubAPIError: Error, LocalizedError, Sendable, Equatable {
   case updateRequired(minimumVersion: String)
   case noStoredSession
   case revoked
+  /// The request was abandoned by the user or the system (pull-to-refresh gesture resolving,
+  /// a backgrounding app, SwiftUI cancelling a `.task`) rather than failing. Kept distinct from
+  /// `.transport` so callers can filter it out instead of showing "네트워크 오류: cancelled".
+  case cancelled
 
   public var errorDescription: String? {
     switch self {
@@ -42,6 +46,7 @@ public enum ActionHubAPIError: Error, LocalizedError, Sendable, Equatable {
       return "이 서버를 사용하려면 Action Hub iOS \(minimumVersion) 이상으로 업데이트해야 합니다."
     case .noStoredSession: return "연결된 Action Hub 서버가 없습니다."
     case .revoked: return "이 기기의 연결이 서버에서 해제되었습니다."
+    case .cancelled: return "요청이 취소되었습니다."
     }
   }
 }

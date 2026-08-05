@@ -258,6 +258,15 @@ class ConnectorStatus(BaseModel):
     healthy: bool | None = None
 
 
+class ExecutionErrorEntry(BaseModel):
+    item_id: str
+    title: str
+    error: str
+    # Best-effort outbox attempt count for this item; left at 0 when the lookup
+    # is skipped rather than pretending an attempt count that was never read.
+    attempts: int = 0
+
+
 class ExecutionSummary(BaseModel):
     plan_id: str
     plan_status: PlanStatus
@@ -268,6 +277,12 @@ class ExecutionSummary(BaseModel):
     failed: int
     skipped_duplicate: int
     pending: int
+    # A 200 response must not read as unconditional success: items whose outbox
+    # event is retrying (state QUEUED/EXECUTING with a non-empty execution_error)
+    # are counted here and surfaced as ``errors`` instead of vanishing into
+    # ``queued``. See services/executor.py:build_execution_summary.
+    retrying: int = 0
+    errors: list[ExecutionErrorEntry] = Field(default_factory=list)
     items: list[ActionItemRead]
 
 

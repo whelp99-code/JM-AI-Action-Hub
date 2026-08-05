@@ -1,17 +1,18 @@
 from __future__ import annotations
 
 import hashlib
+import re
 
 from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from ..config import Settings
-from ..models import ActionItem, ActionPlan, ActionType, Destination, ItemState, PlanStatus
-from ..schemas import ActionItemUpdate
+from ..models import ActionItem, ActionPlan, ActionType, Destination, ItemState, OutboxEvent, PlanStatus
+from ..schemas import ActionItemUpdate, ExecutionErrorEntry, ExecutionSummary
 from .audit import record_audit
 from .outbox import enqueue_registration, process_outbox_batch
 from .planner import get_plan
-from .state_sync import recalculate_plan_status
+from .state_sync import clear_needs_review, recalculate_plan_status
 
 TERMINAL_ITEM_STATES = {
     ItemState.COMPLETED.value,
@@ -19,6 +20,112 @@ TERMINAL_ITEM_STATES = {
     ItemState.SKIPPED_DUPLICATE.value,
     ItemState.CANCELLED.value,
 }
+
+_ACTIVE_STATES = {ItemState.QUEUED.value, ItemState.EXECUTING.value}
+_MAX_EXECUTION_ERRORS = 20
+
+# Connector failures can echo back request context (headers, query strings) that
+# carried a credential. These patterns cover the shapes actually used by the
+# bundled connectors (Bearer headers, key=value pairs, provider token prefixes)
+# so execution_error text is safe to return to a mobile client.
+_SECRET_PATTERNS = [
+    re.compile(r"(?i)\b(Bearer)\s+[A-Za-z0-9._~+/=-]{8,}"),
+    re.compile(
+        r"(?i)\b(api[_-]?key|token|secret|password|access[_-]?token)\b(\s*[:=]\s*)[\"']?[A-Za-z0-9._~+/=-]{6,}[\"']?"
+    ),
+    re.compile(r"\bgh[pousr]_[A-Za-z0-9]{20,}\b"),
+    re.compile(r"\bsk-[A-Za-z0-9-]{10,}\b"),
+]
+
+
+def _mask_secrets(message: str) -> str:
+    masked = _SECRET_PATTERNS[0].sub(lambda m: f"{m.group(1)} ***", message)
+    masked = _SECRET_PATTERNS[1].sub(lambda m: f"{m.group(1)}{m.group(2)}***", masked)
+    masked = _SECRET_PATTERNS[2].sub("***", masked)
+    masked = _SECRET_PATTERNS[3].sub("***", masked)
+    return masked
+
+
+def _latest_outbox_attempts(db: Session, item_ids: list[str]) -> dict[str, int]:
+    if not item_ids:
+        return {}
+    rows = db.execute(
+        select(OutboxEvent.aggregate_id, OutboxEvent.attempts)
+        .where(
+            OutboxEvent.aggregate_type == "action_item",
+            OutboxEvent.aggregate_id.in_(item_ids),
+            OutboxEvent.event_type == "action.register",
+        )
+        .order_by(OutboxEvent.aggregate_id, OutboxEvent.created_at.desc())
+    ).all()
+    attempts: dict[str, int] = {}
+    for aggregate_id, value in rows:
+        # First row per aggregate_id wins because of the created_at DESC order,
+        # i.e. it is the most recent outbox event for that item.
+        attempts.setdefault(aggregate_id, value)
+    return attempts
+
+
+def build_execution_summary(db: Session, plan: ActionPlan) -> ExecutionSummary:
+    """Single source of truth for the execute-plan response shape.
+
+    Both api/mobile.py and api/routes.py called this independently before,
+    which had already drifted once (mobile lacked the ``failed``/``pending``
+    accounting present in the plain API). Keeping one implementation means a
+    fix here reaches both callers.
+    """
+
+    action_completed = sum(item.state == ItemState.COMPLETED.value for item in plan.items)
+    registered_states = {
+        ItemState.REGISTERED.value,
+        ItemState.WAITING.value,
+        ItemState.DISPATCHED.value,
+        ItemState.RUNNING.value,
+        ItemState.NEEDS_INPUT.value,
+        ItemState.HUMAN_REVIEW.value,
+    }
+    registered = sum(item.state in registered_states for item in plan.items)
+    queued = sum(item.state in _ACTIVE_STATES for item in plan.items)
+    failed = sum(item.state == ItemState.FAILED.value for item in plan.items)
+    duplicate = sum(item.state == ItemState.SKIPPED_DUPLICATE.value for item in plan.items)
+    rejected = sum(item.state == ItemState.REJECTED.value for item in plan.items)
+    pending = len(plan.items) - action_completed - registered - queued - failed - duplicate - rejected
+
+    # A retrying item is still counted in ``queued`` above (state is
+    # QUEUED/EXECUTING) so existing consumers of that field keep working, but it
+    # also carries an execution_error from a failed attempt -- see
+    # services/outbox.py:_mark_retry. Surfacing it here is what stops a 200
+    # response from reading as unconditional success.
+    retrying_items = [
+        item for item in plan.items if item.state in _ACTIVE_STATES and (item.execution_error or "").strip()
+    ]
+    errors: list[ExecutionErrorEntry] = []
+    if retrying_items:
+        attempts_by_item = _latest_outbox_attempts(db, [item.id for item in retrying_items])
+        for item in retrying_items[:_MAX_EXECUTION_ERRORS]:
+            errors.append(
+                ExecutionErrorEntry(
+                    item_id=item.id,
+                    title=item.title,
+                    error=_mask_secrets(item.execution_error or ""),
+                    attempts=attempts_by_item.get(item.id, 0),
+                )
+            )
+
+    return ExecutionSummary(
+        plan_id=plan.id,
+        plan_status=plan.status,
+        completed=registered + action_completed,
+        registered=registered,
+        action_completed=action_completed,
+        queued=queued,
+        failed=failed,
+        skipped_duplicate=duplicate,
+        pending=max(0, pending),
+        retrying=len(retrying_items),
+        errors=errors,
+        items=plan.items,
+    )
 
 
 def _structural_review_reasons(item: ActionItem) -> list[str]:
@@ -90,7 +197,11 @@ def update_item(db: Session, plan_id: str, item_id: str, patch: ActionItemUpdate
         entity_id=item.id,
         event_type="item.updated",
         actor=actor,
-        payload={k: str(v) for k, v in changes.items()},
+        # LegacyStringEnum.__str__ returns "Type.NAME" for backward compatibility
+        # with v0.1 string-enum consumers (see models.py). That form leaked into
+        # this audit payload and from there into the mobile activity feed
+        # subtitle (services/mobile.py:_activity_title). Use .value instead.
+        payload={k: (v.value if hasattr(v, "value") else str(v)) for k, v in changes.items()},
     )
     db.commit()
     refreshed = get_plan(db, plan_id)
@@ -137,10 +248,9 @@ def approve_plan(
             payload={"forced_review": force_review_items and item.needs_review},
         )
         # A human explicitly approved this item, so the safety gate has done its
-        # job -- clear the flag so the item drops out of the review list. The
-        # structural/manual `review_reason` text is intentionally left in place
-        # as an audit trail of why it needed review in the first place.
-        item.needs_review = False
+        # job -- clear the flag so the item drops out of the review list. See
+        # state_sync.clear_needs_review for why review_reason is left in place.
+        clear_needs_review(item)
         item.state = ItemState.APPROVED.value
         item.execution_error = None
         approved += 1
@@ -182,7 +292,7 @@ def reject_items(
             # Same reasoning as approve_plan(): an explicit human decision (here,
             # exclusion) closes out the review, so the item must stop matching the
             # needs_review OR draft review-list filter. review_reason is kept.
-            item.needs_review = False
+            clear_needs_review(item)
             record_audit(
                 db,
                 entity_type="item",

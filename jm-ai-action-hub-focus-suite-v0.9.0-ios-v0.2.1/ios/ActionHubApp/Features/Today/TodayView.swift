@@ -96,14 +96,14 @@ struct TodayView: View {
             if !focus.humanBig3.isEmpty {
               Text("내 Big3").font(.caption.bold()).foregroundStyle(.secondary)
               ForEach(focus.humanBig3.prefix(3)) { commitment in
-                Text("\(commitment.rank). \(commitment.action?.title ?? commitment.actionItemId)")
+                Text("\(commitment.rank). \(commitment.action?.title ?? "제목을 불러올 수 없는 업무")")
                   .font(.subheadline).lineLimit(1).privacySensitive()
               }
             }
             if !focus.aiBig3.isEmpty {
               Text("AI Big3").font(.caption.bold()).foregroundStyle(.secondary)
               ForEach(focus.aiBig3.prefix(3)) { commitment in
-                Text("\(commitment.rank). \(commitment.action?.title ?? commitment.actionItemId)")
+                Text("\(commitment.rank). \(commitment.action?.title ?? "제목을 불러올 수 없는 업무")")
                   .font(.subheadline).lineLimit(1).privacySensitive()
               }
             }
