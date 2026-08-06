@@ -1,3 +1,4 @@
+import ActionHubCore
 import SwiftUI
 import UIKit
 
@@ -12,6 +13,11 @@ struct CaptureView: View {
   /// a manual edit made mid-recording: if `text` has drifted from this, the user typed
   /// something, and the next partial result must not silently overwrite it.
   @State private var lastAppliedTranscript = ""
+  /// The text already in the field when recording started. Speech results are appended after
+  /// this rather than replacing it, so starting the mic with existing notes doesn't wipe them.
+  @State private var recordingBaseText = ""
+
+  private var visibleSpeechError: String? { speech.errorMessage ?? speech.permissionHint }
 
   var body: some View {
     NavigationStack {
@@ -20,6 +26,7 @@ struct CaptureView: View {
           .focused($focused)
           .font(.body)
           .padding(10)
+          .frame(minHeight: 100, maxHeight: 220)
           .background(.quaternary, in: RoundedRectangle(cornerRadius: 14))
           .overlay(alignment: .topLeading) {
             if text.isEmpty {
@@ -29,6 +36,22 @@ struct CaptureView: View {
                 .allowsHitTesting(false)
             }
           }
+
+        // Placed directly under the text field -- above the button row -- so it stays visible
+        // even at the `.medium` sheet detent, instead of being the last (and first-clipped)
+        // element at the bottom of the stack.
+        if let error = visibleSpeechError {
+          VStack(alignment: .leading, spacing: 6) {
+            Label(error, systemImage: "exclamationmark.triangle.fill")
+              .font(.footnote)
+              .foregroundStyle(.red)
+              .accessibilityLabel("음성 입력 오류: \(error)")
+            if speech.needsSettingsAction {
+              Button("설정 앱에서 권한 켜기") { speech.openSettings() }
+                .font(.footnote.bold())
+            }
+          }
+        }
 
         HStack {
           Button {
@@ -44,6 +67,7 @@ struct CaptureView: View {
               if speech.isRecording {
                 speech.stop()
               } else {
+                recordingBaseText = text
                 lastAppliedTranscript = text
                 await speech.start()
               }
@@ -66,12 +90,7 @@ struct CaptureView: View {
           .foregroundStyle(.secondary)
         }
 
-        if let error = speech.errorMessage {
-          Label(error, systemImage: "exclamationmark.triangle.fill")
-            .font(.footnote)
-            .foregroundStyle(.red)
-            .accessibilityLabel("음성 입력 오류: \(error)")
-        }
+        Spacer(minLength: 0)
       }
       .padding()
       .navigationTitle("빠른 입력")
@@ -91,15 +110,26 @@ struct CaptureView: View {
         }
       }
       .onChange(of: speech.transcript) { _, value in
-        guard !value.isEmpty else { return }
-        // If `text` no longer matches the last partial result we wrote, the user edited it by
-        // hand since -- do not stomp that edit with the next partial result.
-        guard text == lastAppliedTranscript else { return }
-        text = value
-        lastAppliedTranscript = value
+        guard
+          let merged = SpeechTranscriptMerge.apply(
+            currentText: text, lastApplied: lastAppliedTranscript, baseText: recordingBaseText,
+            newResult: value)
+        else { return }
+        text = merged
+        lastAppliedTranscript = merged
       }
-      .onAppear { focused = true }
+      .onAppear {
+        focused = true
+        speech.refreshPermissionStatus()
+      }
       .onDisappear { speech.stop() }
+      .onReceive(
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+      ) { _ in
+        // Permission changes made in Settings.app while this sheet stayed open don't otherwise
+        // notify `speech` -- re-check on every return to the foreground.
+        speech.refreshPermissionStatus()
+      }
     }
   }
 }
