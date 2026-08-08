@@ -10,6 +10,11 @@ dist/
 build/
 *.egg-info/
 data/*.db
+# Operational snapshots (backup.sh, manual pre-migration copies) carry the same
+# captured message bodies as the live database, so they need the same exclusion.
+data/*.db.*
+data/*.db-shm
+data/*.db-wal
 data/exports/*.ics
 backups/
 .DS_Store

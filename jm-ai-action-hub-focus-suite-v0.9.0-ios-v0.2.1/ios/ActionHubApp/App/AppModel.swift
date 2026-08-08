@@ -109,6 +109,10 @@ final class AppModel: ObservableObject {
   func resetConnection() {
     connectionState = .disconnected
     lastError = nil
+    // Moving the screen back to pairing was not enough on its own: the stale credential stayed in
+    // the Keychain, so the next launch restored it and landed on the same failure. Revoking on the
+    // server is pointless here -- this path exists because the server could not be reached.
+    Task { try? await session.disconnect(revokeServer: false) }
   }
 
   func consumePendingPairingPayload() -> String? {
