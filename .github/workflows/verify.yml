@@ -1,0 +1,44 @@
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: verify-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: jm-ai-action-hub-focus-suite-v0.9.0-ios-v0.2.1/server
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.12 is the floor declared in pyproject requires-python; 3.14 is what development runs on.
+        python-version: ['3.12', '3.14']
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: jm-ai-action-hub-focus-suite-v0.9.0-ios-v0.2.1/server/pyproject.toml
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      # scripts/restore.sh resolves the CLI as $ROOT/.venv/bin/action-hub, so the
+      # in-repo venv is part of the contract under test, not just a convenience.
+      - name: Install
+        run: make install
+
+      - name: Verify
+        run: ./scripts/verify.sh
