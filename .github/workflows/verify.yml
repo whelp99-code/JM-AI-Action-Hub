@@ -42,3 +42,6 @@ jobs:
 
       - name: Verify
         run: ./scripts/verify.sh
+
+      - name: Docs check
+        run: make docs-check
