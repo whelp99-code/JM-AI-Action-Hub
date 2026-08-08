@@ -1770,6 +1770,34 @@
         "title": "ExecuteRequest",
         "type": "object"
       },
+      "ExecutionErrorEntry": {
+        "properties": {
+          "attempts": {
+            "default": 0,
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "title",
+          "error"
+        ],
+        "title": "ExecutionErrorEntry",
+        "type": "object"
+      },
       "ExecutionSummary": {
         "properties": {
           "action_completed": {
@@ -1780,6 +1808,13 @@
           "completed": {
             "title": "Completed",
             "type": "integer"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionErrorEntry"
+            },
+            "title": "Errors",
+            "type": "array"
           },
           "failed": {
             "title": "Failed",
@@ -1811,6 +1846,11 @@
           "registered": {
             "default": 0,
             "title": "Registered",
+            "type": "integer"
+          },
+          "retrying": {
+            "default": 0,
+            "title": "Retrying",
             "type": "integer"
           },
           "skipped_duplicate": {
@@ -4801,6 +4841,13 @@
       },
       "PlanRead": {
         "properties": {
+          "blocked_item_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked Item Ids",
+            "type": "array"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
