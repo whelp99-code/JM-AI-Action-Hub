@@ -16,6 +16,7 @@ from .schemas import MobileDeviceRead
 from .services.mobile_auth import create_pairing, get_device, revoke_device
 from .services.parser import build_parser
 from .services.qr import print_qr_ascii, write_qr_svg
+from .services.workers.master_worker_sync import sync_master_worker_executions
 from .worker import run_once
 
 
@@ -41,6 +42,14 @@ def main() -> None:
     worker = sub.add_parser("worker-once", help="Run one durable queue/webhook/follow-up cycle")
     worker.add_argument("--reconcile", action="store_true")
     worker.add_argument("--provider", action="append", dest="providers")
+
+    sub.add_parser(
+        "worker-sync",
+        help=(
+            "Pull JM-AI Master Worker intake status for dispatched master-worker executions "
+            "(explicit, Owner-invoked only; never runs from the background control loop)"
+        ),
+    )
 
     pairing = sub.add_parser("mobile-pairing", help="Create a one-time iOS pairing payload")
     pairing.add_argument("--base-url", default=settings.mobile_public_base_url)
@@ -90,6 +99,12 @@ def main() -> None:
                 result = run_once(db, settings, reconcile=args.reconcile, providers=args.providers)
             print(json.dumps(result.as_dict(), ensure_ascii=False))
             return
+        if args.command == "worker-sync":
+            database.create_schema(use_migrations=settings.run_migrations)
+            with database.session_factory() as db:
+                summary = sync_master_worker_executions(db, settings)
+            print(json.dumps(summary.as_dict(), ensure_ascii=False))
+            raise SystemExit(0 if summary.failed == 0 else 1)
         if args.command == "mobile-pairing":
             if not args.base_url:
                 raise SystemExit("--base-url or ACTION_HUB_MOBILE_PUBLIC_BASE_URL is required")

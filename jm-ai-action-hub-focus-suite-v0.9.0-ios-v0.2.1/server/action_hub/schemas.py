@@ -225,6 +225,10 @@ class PlanRead(BaseModel):
     updated_at: datetime
     items: list[ActionItemRead]
     inbox: InboxRead | None = None
+    # Populated only by approve_plan() when items were left blocked because they
+    # still need review and the caller did not force an override. Empty for every
+    # other endpoint that returns a PlanRead. See services/executor.py:approve_plan.
+    blocked_item_ids: list[str] = Field(default_factory=list)
 
 
 class ApprovalRequest(BaseModel):
@@ -254,6 +258,15 @@ class ConnectorStatus(BaseModel):
     healthy: bool | None = None
 
 
+class ExecutionErrorEntry(BaseModel):
+    item_id: str
+    title: str
+    error: str
+    # Best-effort outbox attempt count for this item; left at 0 when the lookup
+    # is skipped rather than pretending an attempt count that was never read.
+    attempts: int = 0
+
+
 class ExecutionSummary(BaseModel):
     plan_id: str
     plan_status: PlanStatus
@@ -264,6 +277,12 @@ class ExecutionSummary(BaseModel):
     failed: int
     skipped_duplicate: int
     pending: int
+    # A 200 response must not read as unconditional success: items whose outbox
+    # event is retrying (state QUEUED/EXECUTING with a non-empty execution_error)
+    # are counted here and surfaced as ``errors`` instead of vanishing into
+    # ``queued``. See services/executor.py:build_execution_summary.
+    retrying: int = 0
+    errors: list[ExecutionErrorEntry] = Field(default_factory=list)
     items: list[ActionItemRead]
 
 
@@ -513,7 +532,7 @@ class MobileDeviceRead(BaseModel):
     push_registered: bool = False
 
     @classmethod
-    def from_device(cls, device: Any) -> "MobileDeviceRead":
+    def from_device(cls, device: Any) -> MobileDeviceRead:
         return cls(
             id=device.id,
             device_name=device.device_name,

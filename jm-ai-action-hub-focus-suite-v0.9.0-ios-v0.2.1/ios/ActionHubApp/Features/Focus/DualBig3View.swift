@@ -70,6 +70,7 @@ struct DualBig3View: View {
       .padding()
       .background(.bar)
     }
+    .refreshable { await model.refreshAllDetached() }
     .task { loadCurrent() }
     .onChange(of: model.big3?.date) { _, _ in loadCurrent() }
   }
@@ -83,7 +84,7 @@ struct DualBig3View: View {
       ForEach(Array(ids.enumerated()), id: \.element) { index, id in
         HStack {
           Text("\(index + 1)").font(.headline.monospacedDigit()).foregroundStyle(.secondary)
-          Text(candidates.first(where: { $0.id == id })?.title ?? id).lineLimit(2)
+          Text(candidates.first(where: { $0.id == id })?.title ?? "제목을 불러올 수 없는 업무").lineLimit(2)
           Spacer()
           Button(role: .destructive) {
             remove(id)

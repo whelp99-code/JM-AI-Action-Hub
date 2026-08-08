@@ -4,10 +4,23 @@ import base64
 import hashlib
 import hmac
 import json
+
 from sqlalchemy import select
 
-from action_hub.models import ActionItem, ExternalState, SyncConflict
+from action_hub.models import (
+    ActionItem,
+    AuditEvent,
+    ExternalState,
+    MobileDevice,
+    PushNotification,
+    SyncConflict,
+    WebhookDelivery,
+    WorkerExecution,
+)
 from action_hub.services.reconciliation import reconcile_external_states
+from action_hub.services.webhooks import process_webhook_batch
+
+TEST_API_KEY = "test-api-key-" + ("x" * 32)
 
 
 def _create(client, text: str):
@@ -22,6 +35,53 @@ def _create(client, text: str):
     )
     assert response.status_code == 201, response.text
     return response.json()
+
+
+def test_apply_external_state_completed_and_cancelled_clear_needs_review(client):
+    # Regression for P1-4: apply_external_state()'s completed/cancelled
+    # branches moved the item to a terminal state but never cleared
+    # needs_review -- the same bug pattern fixed today for approve/reject, at
+    # the external-sync call site (state_sync.py, reached by both webhooks and
+    # the reconciliation poller).
+    from action_hub.services.mobile import list_review_plans
+    from action_hub.services.state_sync import apply_external_state
+
+    plan = _create(client, "repo:owner/repo 로그인 오류를 codex로 수정")
+    item_id = plan["items"][0]["id"]
+
+    with client.app.state.database.session_factory() as db:
+        item = db.get(ActionItem, item_id)
+        item.needs_review = True
+        item.review_reason = "테스트: 검토 필요"
+        db.commit()
+        assert any(p.id == plan["id"] for p in list_review_plans(db, 50))
+
+        item = db.get(ActionItem, item_id)
+        apply_external_state(db, item=item, provider="github", external_id="owner/repo#1", state="closed")
+        db.commit()
+        db.refresh(item)
+        assert item.state == "completed"
+        assert item.needs_review is False
+        assert item.review_reason == "테스트: 검토 필요"
+        assert all(p.id != plan["id"] for p in list_review_plans(db, 50))
+
+    with client.app.state.database.session_factory() as db:
+        item = db.get(ActionItem, item_id)
+        # Reset off the terminal COMPLETED state left by the first half of this
+        # test so the review-list membership check below actually exercises
+        # needs_review, not the (already-covered) terminal-state exclusion.
+        item.state = "registered"
+        item.needs_review = True
+        db.commit()
+        assert any(p.id == plan["id"] for p in list_review_plans(db, 50))
+
+        item = db.get(ActionItem, item_id)
+        apply_external_state(db, item=item, provider="github", external_id="owner/repo#1", state="deleted")
+        db.commit()
+        db.refresh(item)
+        assert item.state == "cancelled"
+        assert item.needs_review is False
+        assert all(p.id != plan["id"] for p in list_review_plans(db, 50))
 
 
 def _approve_execute(client, plan):
@@ -39,6 +99,101 @@ def _hex_signature(secret: str, body: bytes) -> str:
     return "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
 
 
+def _github_check_suite_payload(action_item_id: str) -> dict:
+    return {
+        "action": "completed",
+        "repository": {"full_name": "owner/repo"},
+        "check_suite": {
+            "id": 501,
+            "status": "completed",
+            "conclusion": "success",
+            "head_branch": f"action-hub-{action_item_id}",
+            "check_runs_url": "https://github.example/owner/repo/checks/501",
+            "updated_at": "2026-07-29T08:00:00Z",
+        },
+    }
+
+
+def _prepare_github_check_suite_target(app) -> tuple[str, str]:
+    from fastapi.testclient import TestClient
+
+    with TestClient(app) as client:
+        client.headers["X-Action-Hub-Key"] = app.state.settings.api_key
+        plan = _create(client, "repo:owner/repo 로그인 오류를 codex로 수정")
+    item_id = plan["items"][0]["id"]
+    with app.state.database.session_factory() as db:
+        execution = WorkerExecution(
+            action_item_id=item_id,
+            worker="codex",
+            state="running",
+            repository="owner/repo",
+        )
+        device = MobileDevice(
+            device_name="queued-webhook-test-device",
+            push_token=f"queued-webhook-test-token-{item_id}",
+        )
+        db.add(execution)
+        db.add(device)
+        db.commit()
+        return item_id, execution.id
+
+
+def _queue_github_check_suite_delivery(app, action_item_id: str, secret: str | None = None) -> str:
+    from fastapi.testclient import TestClient
+
+    body = json.dumps(_github_check_suite_payload(action_item_id), separators=(",", ":")).encode()
+    headers = {
+        "X-GitHub-Delivery": f"check-suite-{action_item_id}",
+        "X-GitHub-Event": "check_suite",
+    }
+    if secret:
+        headers["X-Hub-Signature-256"] = _hex_signature(secret, body)
+    with TestClient(app) as client:
+        response = client.post("/api/v1/webhooks/github", content=body, headers=headers)
+        assert response.status_code == 202, response.text
+        assert response.json()["duplicate"] is False
+    with app.state.database.session_factory() as db:
+        delivery = db.scalar(select(WebhookDelivery))
+        assert delivery is not None
+        assert delivery.status == "pending"
+        assert delivery.signature_valid is bool(secret)
+        return delivery.id
+
+
+def _github_check_suite_domain_state(db, item_id: str, execution_id: str) -> tuple:
+    item = db.get(ActionItem, item_id)
+    execution = db.get(WorkerExecution, execution_id)
+    assert item is not None
+    assert execution is not None
+    return (
+        item.state,
+        execution.state,
+        execution.workflow_run_id,
+        execution.output_summary,
+        len(
+            list(
+                db.scalars(
+                    select(ExternalState).where(
+                        ExternalState.action_item_id == item_id,
+                        ExternalState.provider == "github_check_suite",
+                    )
+                )
+            )
+        ),
+        len(
+            list(
+                db.scalars(
+                    select(AuditEvent).where(
+                        AuditEvent.entity_id == execution_id,
+                        AuditEvent.event_type == "worker.check_suite_updated",
+                    )
+                )
+            )
+        ),
+        len(list(db.scalars(select(PushNotification)))),
+    )
+
+
 def test_outbox_registration_separates_routing_from_completion(client):
     plan = _create(client, "내일 오후 3시까지 제안서 작성")
     result = _approve_execute(client, plan)
@@ -54,18 +209,21 @@ def test_outbox_registration_separates_routing_from_completion(client):
 
 def test_todoist_signed_webhook_completes_and_deduplicates(tmp_path):
     from fastapi.testclient import TestClient
+
     from action_hub.config import Settings
     from action_hub.main import create_app
 
     secret = "todoist-secret"
     settings = Settings(
         app_env="test",
+        api_key=TEST_API_KEY,
         database_url=f"sqlite+pysqlite:///{tmp_path / 'todoist-hook.db'}",
         data_dir=tmp_path,
         execution_mode="dry_run",
         todoist_client_secret=secret,
     )
     with TestClient(create_app(settings)) as client:
+        client.headers["X-Action-Hub-Key"] = settings.api_key
         plan = _create(client, "내일 오후 3시까지 제안서 작성")
         routed = _approve_execute(client, plan)
         item = routed["items"][0]
@@ -91,32 +249,231 @@ def test_todoist_signed_webhook_completes_and_deduplicates(tmp_path):
 
 def test_invalid_webhook_signature_is_rejected(tmp_path):
     from fastapi.testclient import TestClient
+
     from action_hub.config import Settings
     from action_hub.main import create_app
 
     settings = Settings(
         app_env="test",
+        api_key=TEST_API_KEY,
         database_url=f"sqlite+pysqlite:///{tmp_path / 'invalid-hook.db'}",
         data_dir=tmp_path,
         todoist_client_secret="correct-secret",
+        allow_unsigned_webhooks=True,
     )
-    with TestClient(create_app(settings)) as client:
+    app = create_app(settings)
+    with TestClient(app) as client:
+        client.headers["X-Action-Hub-Key"] = settings.api_key
         response = client.post(
             "/api/v1/webhooks/todoist",
             content=b'{"event_name":"item:updated","event_data":{"id":"1"}}',
             headers={"X-Todoist-Hmac-SHA256": "bad"},
         )
         assert response.status_code == 401
+    with app.state.database.session_factory() as db:
+        assert db.scalar(select(WebhookDelivery)) is None
+
+
+def test_missing_webhook_secret_requires_explicit_opt_in_without_delivery(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from action_hub.config import Settings
+    from action_hub.main import create_app
+
+    for app_env in ("development", "test"):
+        settings = Settings(
+            app_env=app_env,
+            api_key=TEST_API_KEY,
+            database_url=f"sqlite+pysqlite:///{tmp_path / f'{app_env}-unsigned-disabled.db'}",
+            data_dir=tmp_path / f"{app_env}-unsigned-disabled",
+            worker_inline=False,
+        )
+        app = create_app(settings)
+        with TestClient(app) as client:
+            response = client.post(
+                "/api/v1/webhooks/todoist",
+                content=b'{"event_name":"item:updated","event_data":{"id":"1"}}',
+            )
+            assert response.status_code == 503
+        with app.state.database.session_factory() as db:
+            assert db.scalar(select(WebhookDelivery)) is None
+
+
+def test_unsigned_webhook_opt_in_is_non_production_only(tmp_path):
+    from fastapi.testclient import TestClient
+
+    from action_hub.config import Settings
+    from action_hub.main import create_app
+
+    body = b'{"event_name":"item:updated","event_data":{"id":"1"}}'
+    for app_env in ("development", "test"):
+        settings = Settings(
+            app_env=app_env,
+            api_key=TEST_API_KEY,
+            database_url=f"sqlite+pysqlite:///{tmp_path / f'{app_env}-unsigned-enabled.db'}",
+            data_dir=tmp_path / f"{app_env}-unsigned-enabled",
+            allow_unsigned_webhooks=True,
+            worker_inline=False,
+        )
+        app = create_app(settings)
+        with TestClient(app) as client:
+            response = client.post("/api/v1/webhooks/todoist", content=body)
+            assert response.status_code == 202
+        with app.state.database.session_factory() as db:
+            delivery = db.scalar(select(WebhookDelivery))
+            assert delivery is not None
+            assert delivery.status == "pending"
+            assert delivery.signature_valid is False
+
+    settings = Settings(
+        app_env="production",
+        api_key=TEST_API_KEY,
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'production-unsigned-enabled.db'}",
+        data_dir=tmp_path / "production-unsigned-enabled",
+        allow_unsigned_webhooks=True,
+        worker_inline=False,
+    )
+    app = create_app(settings)
+    with TestClient(app) as client:
+        response = client.post("/api/v1/webhooks/todoist", content=body)
+        assert response.status_code == 503
+    with app.state.database.session_factory() as db:
+        assert db.scalar(select(WebhookDelivery)) is None
+
+
+def test_queued_unsigned_github_webhook_is_rejected_after_production_switch(tmp_path):
+    from action_hub.config import Settings
+    from action_hub.main import create_app
+
+    development_settings = Settings(
+        app_env="development",
+        api_key=TEST_API_KEY,
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'queued-unsigned-production.db'}",
+        data_dir=tmp_path / "queued-unsigned-production",
+        allow_unsigned_webhooks=True,
+        worker_inline=False,
+    )
+    app = create_app(development_settings)
+    item_id, execution_id = _prepare_github_check_suite_target(app)
+    delivery_id = _queue_github_check_suite_delivery(app, item_id)
+
+    production_settings = development_settings.model_copy(update={"app_env": "production"})
+    with app.state.database.session_factory() as db:
+        before = _github_check_suite_domain_state(db, item_id, execution_id)
+        result = process_webhook_batch(db, production_settings, delivery_ids=[delivery_id])
+        delivery = db.get(WebhookDelivery, delivery_id)
+        assert result == {"processed": 1, "completed": 0, "failed": 1, "unmatched": 0, "ignored": 0}
+        assert delivery is not None
+        assert delivery.status == "retry"
+        assert delivery.error == "Unsigned webhook delivery is not permitted by current policy"
+        assert _github_check_suite_domain_state(db, item_id, execution_id) == before
+
+
+def test_queued_unsigned_github_webhook_is_rejected_when_opt_in_is_disabled(tmp_path):
+    from action_hub.config import Settings
+    from action_hub.main import create_app
+
+    opted_in_settings = Settings(
+        app_env="development",
+        api_key=TEST_API_KEY,
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'queued-unsigned-disabled.db'}",
+        data_dir=tmp_path / "queued-unsigned-disabled",
+        allow_unsigned_webhooks=True,
+        worker_inline=False,
+    )
+    app = create_app(opted_in_settings)
+    item_id, execution_id = _prepare_github_check_suite_target(app)
+    delivery_id = _queue_github_check_suite_delivery(app, item_id)
+
+    disabled_settings = opted_in_settings.model_copy(update={"allow_unsigned_webhooks": False})
+    with app.state.database.session_factory() as db:
+        before = _github_check_suite_domain_state(db, item_id, execution_id)
+        result = process_webhook_batch(db, disabled_settings, delivery_ids=[delivery_id])
+        delivery = db.get(WebhookDelivery, delivery_id)
+        assert result == {"processed": 1, "completed": 0, "failed": 1, "unmatched": 0, "ignored": 0}
+        assert delivery is not None
+        assert delivery.status == "retry"
+        assert _github_check_suite_domain_state(db, item_id, execution_id) == before
+
+
+def test_queued_unsigned_github_webhook_processes_while_opt_in_remains_enabled(tmp_path):
+    from action_hub.config import Settings
+    from action_hub.main import create_app
+
+    settings = Settings(
+        app_env="development",
+        api_key=TEST_API_KEY,
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'queued-unsigned-enabled.db'}",
+        data_dir=tmp_path / "queued-unsigned-enabled",
+        allow_unsigned_webhooks=True,
+        worker_inline=False,
+    )
+    app = create_app(settings)
+    item_id, execution_id = _prepare_github_check_suite_target(app)
+    delivery_id = _queue_github_check_suite_delivery(app, item_id)
+
+    with app.state.database.session_factory() as db:
+        result = process_webhook_batch(db, settings, delivery_ids=[delivery_id])
+        delivery = db.get(WebhookDelivery, delivery_id)
+        assert result == {"processed": 1, "completed": 1, "failed": 0, "unmatched": 0, "ignored": 0}
+        assert delivery is not None
+        assert delivery.status == "processed"
+        assert _github_check_suite_domain_state(db, item_id, execution_id) == (
+            "human_review",
+            "human_review",
+            None,
+            "Check suite completed: success; human review required.",
+            1,
+            1,
+            1,
+        )
+
+
+def test_queued_signed_github_webhook_processes_in_production(tmp_path):
+    from action_hub.config import Settings
+    from action_hub.main import create_app
+
+    secret = "github-webhook-secret"
+    settings = Settings(
+        app_env="production",
+        api_key=TEST_API_KEY,
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'queued-signed-production.db'}",
+        data_dir=tmp_path / "queued-signed-production",
+        github_webhook_secret=secret,
+        worker_inline=False,
+    )
+    app = create_app(settings)
+    item_id, execution_id = _prepare_github_check_suite_target(app)
+    delivery_id = _queue_github_check_suite_delivery(app, item_id, secret)
+
+    with app.state.database.session_factory() as db:
+        result = process_webhook_batch(db, settings, delivery_ids=[delivery_id])
+        delivery = db.get(WebhookDelivery, delivery_id)
+        assert result == {"processed": 1, "completed": 1, "failed": 0, "unmatched": 0, "ignored": 0}
+        assert delivery is not None
+        assert delivery.signature_valid is True
+        assert delivery.status == "processed"
+        assert _github_check_suite_domain_state(db, item_id, execution_id) == (
+            "human_review",
+            "human_review",
+            None,
+            "Check suite completed: success; human review required.",
+            1,
+            1,
+            1,
+        )
 
 
 def test_github_close_and_reopen_records_resolved_conflict(tmp_path):
     from fastapi.testclient import TestClient
+
     from action_hub.config import Settings
     from action_hub.main import create_app
 
     secret = "github-secret"
     settings = Settings(
         app_env="test",
+        api_key=TEST_API_KEY,
         database_url=f"sqlite+pysqlite:///{tmp_path / 'github-hook.db'}",
         data_dir=tmp_path,
         execution_mode="dry_run",
@@ -125,6 +482,7 @@ def test_github_close_and_reopen_records_resolved_conflict(tmp_path):
     )
     app = create_app(settings)
     with TestClient(app) as client:
+        client.headers["X-Action-Hub-Key"] = settings.api_key
         plan = _create(client, "repo:owner/repo 로그인 오류 수정")
         routed = _approve_execute(client, plan)
         item_id = routed["items"][0]["id"]
@@ -173,8 +531,7 @@ def test_reconciliation_updates_state_and_is_non_destructive_on_missing(client, 
     from action_hub.connectors.registry import ConnectorRegistry
 
     plan = _create(client, "내일 오후 3시까지 제안서 작성")
-    routed = _approve_execute(client, plan)
-    item_id = routed["items"][0]["id"]
+    _approve_execute(client, plan)
 
     class FakeConnector:
         def fetch_state(self, external_id, item=None):

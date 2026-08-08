@@ -6,8 +6,9 @@ import hmac
 import json
 import logging
 import re
+from collections.abc import Mapping
 from datetime import datetime
-from typing import Any, Mapping
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -23,7 +24,12 @@ from ..models import (
 )
 from .audit import record_audit
 from .push import queue_push_for_active_devices
-from .state_sync import apply_external_state, find_external_state, recalculate_plan_status, upsert_external_state
+from .state_sync import (
+    apply_external_state,
+    find_external_state,
+    recalculate_plan_status,
+    upsert_external_state,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +128,7 @@ def receive_webhook(
     lowered = _headers_lower(headers)
     secret = _provider_secret(settings, provider)
     if not secret:
-        if settings.app_env == "production":
+        if settings.app_env == "production" or not settings.allow_unsigned_webhooks:
             raise WebhookConfigurationError(f"{provider} webhook signing secret is not configured")
         signature_valid = False
     else:
@@ -641,6 +647,10 @@ def _fireflies_handler(db: Session, delivery: WebhookDelivery, settings: Setting
 
 
 def process_webhook_delivery(db: Session, delivery: WebhookDelivery, settings: Settings) -> None:
+    if not delivery.signature_valid and (
+        settings.app_env == "production" or not settings.allow_unsigned_webhooks
+    ):
+        raise WebhookSecurityError("Unsigned webhook delivery is not permitted by current policy")
     if delivery.provider == "todoist":
         _todoist_handler(db, delivery, settings)
     elif delivery.provider == "github":
@@ -733,4 +743,3 @@ def process_webhook_batch(
         db.commit()
         summary["processed"] += 1
     return summary
-

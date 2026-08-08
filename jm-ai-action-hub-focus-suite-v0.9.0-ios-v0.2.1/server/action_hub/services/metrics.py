@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -30,10 +30,10 @@ def record_metric(
 
 
 def _period_bounds(end_date: date | None = None) -> tuple[date, date, datetime, datetime]:
-    end = end_date or datetime.now(timezone.utc).date()
+    end = end_date or datetime.now(UTC).date()
     start = end - timedelta(days=6)
-    start_dt = datetime.combine(start, time.min, tzinfo=timezone.utc)
-    end_dt = datetime.combine(end + timedelta(days=1), time.min, tzinfo=timezone.utc)
+    start_dt = datetime.combine(start, time.min, tzinfo=UTC)
+    end_dt = datetime.combine(end + timedelta(days=1), time.min, tzinfo=UTC)
     return start, end, start_dt, end_dt
 
 

@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import math
-from collections import defaultdict
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..config import Settings
 from ..focus_schemas import (
@@ -52,7 +51,7 @@ from ..models import (
 from .audit import record_audit
 from .followups import ensure_followup
 from .metrics import record_metric
-
+from .state_sync import clear_needs_review
 
 TERMINAL_STATES = {
     ItemState.COMPLETED.value,
@@ -61,6 +60,7 @@ TERMINAL_STATES = {
     ItemState.CANCELLED.value,
 }
 ACTIVE_FOCUS_STATES = {FocusSessionState.RUNNING.value, FocusSessionState.PAUSED.value}
+MATRIX_QUADRANTS = (Quadrant.Q1.value, Quadrant.Q2.value, Quadrant.Q3.value, Quadrant.Q4.value)
 
 
 def _local(value: datetime | None, tz: ZoneInfo) -> datetime | None:
@@ -307,26 +307,65 @@ def classify_action(
     return _action_summary(item, settings)
 
 
-def matrix(db: Session, settings: Settings, *, limit_per_quadrant: int = 100) -> MatrixResponse:
-    rows = list(
-        db.scalars(
-            select(ActionItem)
-            .where(ActionItem.state.notin_(TERMINAL_STATES))
-            .options(selectinload(ActionItem.priority_assessment))
-            .order_by(ActionItem.deadline_at.is_(None), ActionItem.deadline_at, ActionItem.created_at)
+def _matrix_counts(db: Session) -> tuple[dict[str, int], int]:
+    counts = {quadrant: 0 for quadrant in MATRIX_QUADRANTS}
+    classified_counts = db.execute(
+        select(PriorityAssessment.quadrant, func.count(ActionItem.id))
+        .select_from(ActionItem)
+        .join(ActionItem.priority_assessment)
+        .where(
+            ActionItem.state.notin_(TERMINAL_STATES),
+            ActionItem.attention_state != AttentionState.UNTRIAGED.value,
+        )
+        .group_by(PriorityAssessment.quadrant)
+    )
+    for quadrant, count in classified_counts:
+        if quadrant in counts:
+            counts[quadrant] = count
+
+    untriaged = db.scalar(
+        select(func.count(ActionItem.id))
+        .select_from(ActionItem)
+        .outerjoin(ActionItem.priority_assessment)
+        .where(
+            ActionItem.state.notin_(TERMINAL_STATES),
+            or_(
+                ActionItem.attention_state == AttentionState.UNTRIAGED.value,
+                PriorityAssessment.id.is_(None),
+            ),
         )
     )
-    grouped: dict[str, list[FocusActionSummary]] = defaultdict(list)
-    counts = {key: 0 for key in ("q1", "q2", "q3", "q4")}
-    untriaged = 0
-    for item in rows:
-        assessment = item.priority_assessment
-        if assessment is None or item.attention_state == AttentionState.UNTRIAGED.value:
-            untriaged += 1
-            continue
-        counts[assessment.quadrant] = counts.get(assessment.quadrant, 0) + 1
-        if limit_per_quadrant > 0 and len(grouped[assessment.quadrant]) < limit_per_quadrant:
-            grouped[assessment.quadrant].append(_action_summary(item, settings))
+    return counts, untriaged or 0
+
+
+def _matrix_quadrant_rows(
+    db: Session, quadrant: str, limit_per_quadrant: int
+) -> list[ActionItem]:
+    return list(
+        db.scalars(
+            select(ActionItem)
+            .join(ActionItem.priority_assessment)
+            .where(
+                ActionItem.state.notin_(TERMINAL_STATES),
+                ActionItem.attention_state != AttentionState.UNTRIAGED.value,
+                PriorityAssessment.quadrant == quadrant,
+            )
+            .options(joinedload(ActionItem.priority_assessment))
+            .order_by(ActionItem.deadline_at.is_(None), ActionItem.deadline_at, ActionItem.created_at)
+            .limit(limit_per_quadrant)
+        )
+    )
+
+
+def matrix(db: Session, settings: Settings, *, limit_per_quadrant: int = 100) -> MatrixResponse:
+    counts, untriaged = _matrix_counts(db)
+    grouped = {quadrant: [] for quadrant in MATRIX_QUADRANTS}
+    if limit_per_quadrant > 0:
+        for quadrant in MATRIX_QUADRANTS:
+            grouped[quadrant] = [
+                _action_summary(item, settings)
+                for item in _matrix_quadrant_rows(db, quadrant, limit_per_quadrant)
+            ]
     return MatrixResponse(
         generated_at=utcnow(),
         counts=counts,
@@ -795,6 +834,7 @@ def update_focus_session(
             item.completed_at = now
             item.completion_evidence = request.completion_note or "Focus session completed"
             item.attention_state = AttentionState.COMPLETED.value
+            clear_needs_review(item)
         else:
             today = datetime.now(ZoneInfo(settings.timezone)).date()
             committed_today = any(
@@ -845,13 +885,22 @@ def close_day(
     tz = ZoneInfo(settings.timezone)
     day = request.target_date or datetime.now(tz).date()
     actor = actor_override or request.actor
+
+    # Preflight every target before changing an item, creating a decision row,
+    # or recording an audit event.  The following writes then share this
+    # session's one commit, including any flush performed by ensure_followup.
+    requested_ids = [decision.action_item_id for decision in request.decisions]
+    items_by_id = {
+        item.id: item
+        for item in db.scalars(select(ActionItem).where(ActionItem.id.in_(requested_ids)))
+    }
+    for action_item_id in requested_ids:
+        if action_item_id not in items_by_id:
+            raise LookupError(f"action_item_not_found:{action_item_id}")
+
     rows: list[CarryOverDecision] = []
-    warnings: list[str] = []
     for decision in request.decisions:
-        item = db.get(ActionItem, decision.action_item_id)
-        if item is None:
-            warnings.append(f"Action not found: {decision.action_item_id}")
-            continue
+        item = items_by_id[decision.action_item_id]
         result: dict = {}
         to_date = decision.to_date
         if decision.decision == "reschedule":
@@ -890,6 +939,7 @@ def close_day(
         elif decision.decision == "cancel":
             item.state = ItemState.CANCELLED.value
             item.attention_state = AttentionState.SKIPPED.value
+            clear_needs_review(item)
             result = {"state": item.state}
         elif decision.decision == "waiting":
             if not decision.waiting_for or not decision.follow_up_at:
@@ -933,7 +983,7 @@ def close_day(
         date=day,
         processed=len(rows),
         decisions=[CarryOverDecisionRead.model_validate(row) for row in rows],
-        warnings=warnings,
+        warnings=[],
     )
 
 

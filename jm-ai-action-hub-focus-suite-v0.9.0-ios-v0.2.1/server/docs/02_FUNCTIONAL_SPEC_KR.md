@@ -302,5 +302,8 @@ action-hub parse
 action-hub migrate
 action-hub check
 action-hub worker-once
+action-hub worker-sync
 action-hub-worker [--once] [--reconcile]
 ```
+
+`worker-sync`는 `master-worker` Worker(로컬 JM-AI Master Worker intake dispatch)의 `dispatched` 상태 Execution만 대상으로, MW 감사 로그(`GET /audit?objectType=intake&objectId=...`)를 조회해 상태를 갱신한다. Owner가 명시적으로 실행할 때만 동작하며 `worker-once`/`action-hub-worker`의 자동 루프에는 포함되지 않는다. 자세한 매핑과 한계는 §17을 참고.

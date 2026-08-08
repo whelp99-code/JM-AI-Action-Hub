@@ -1,4 +1,9 @@
+import json
 from pathlib import Path
+
+from fastapi.testclient import TestClient
+
+from action_hub.main import create_app
 
 
 def create_plan(client, text, force_new=False):
@@ -156,3 +161,71 @@ def test_share_target_rejects_get_query_payload(client):
     response = client.get('/share-target?text=sensitive-source-text', follow_redirects=False)
     assert response.status_code == 405
     assert 'location' not in {key.lower() for key in response.headers}
+
+
+def test_execute_reports_retrying_items_and_errors_instead_of_hiding_failure(settings):
+    # Regression for P0-2: services/outbox.py:_mark_retry keeps the item state
+    # QUEUED (not FAILED) while a retry is pending, so the old summary counted
+    # it as an ordinary in-flight item and reported {"failed": 0}, which read as
+    # unconditional success even though the connector never ran. execution_mode
+    # "live" with no GITHUB_TOKEN configured makes the connector fail
+    # deterministically without any network mocking.
+    live_settings = settings.model_copy(update={"execution_mode": "live"})
+    with TestClient(create_app(live_settings)) as live_client:
+        live_client.headers["X-Action-Hub-Key"] = live_settings.api_key
+        plan, _ = create_plan(live_client, "repo:owner/repo 로그인 오류를 codex로 수정")
+        item = plan["items"][0]
+        assert item["destination"] == "github"
+        approved = live_client.post(f"/api/v1/plans/{plan['id']}/approve", json={"actor": "tester"})
+        assert approved.status_code == 200, approved.text
+        executed = live_client.post(f"/api/v1/plans/{plan['id']}/execute", json={"actor": "tester"})
+
+    assert executed.status_code == 200, executed.text
+    body = executed.json()
+    assert body["failed"] == 0
+    assert body["queued"] == 1
+    assert body["retrying"] == 1
+    assert len(body["errors"]) == 1
+    error = body["errors"][0]
+    assert error["item_id"] == item["id"]
+    assert error["title"] == item["title"]
+    assert "GITHUB_TOKEN" in error["error"]
+    assert error["attempts"] >= 1
+    stuck_item = next(x for x in body["items"] if x["id"] == item["id"])
+    assert stuck_item["state"] == "queued"
+    assert stuck_item["execution_error"]
+
+
+def test_execution_error_masks_bearer_and_key_value_secrets():
+    # P0-2's brief requires that execution_error text reaching the client never
+    # carries a credential. Connectors generally don't echo secrets today, but
+    # the masking must hold if one ever does (e.g. a future connector or a
+    # provider that reflects the request back in an error body).
+    from action_hub.services.executor import _mask_secrets
+
+    assert _mask_secrets("401 Unauthorized: Bearer ghp_ABCDEFGHIJKLMNOPQRSTUVWX") == "401 Unauthorized: Bearer ***"
+    assert _mask_secrets("token=sk-abcdefghijklmnop rejected") == "token=*** rejected"
+    assert _mask_secrets("ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ012345 is invalid") == "*** is invalid"
+    assert _mask_secrets("resource not found") == "resource not found"
+
+
+def test_updated_destination_does_not_leak_enum_repr_into_audit_or_activity(client):
+    # Regression for S17: update_item()'s audit payload used str(v) on the raw
+    # patch values, and LegacyStringEnum.__str__ deliberately returns
+    # "Destination.GITHUB" for v0.1 string-enum compatibility (see
+    # test_features.py:test_string_enums_preserve_legacy_string_and_value_contracts).
+    # That repr then leaked verbatim into the mobile activity feed subtitle via
+    # services/mobile.py:_activity_title -> payload.get("destination").
+    plan, _ = create_plan(client, "제안서 정리")
+    item = plan["items"][0]
+    assert item["destination"] != "github"
+    updated = client.patch(
+        f"/api/v1/plans/{plan['id']}/items/{item['id']}",
+        json={"destination": "github", "repository": "owner/repo"},
+    )
+    assert updated.status_code == 200, updated.text
+
+    audit = client.get("/api/v1/audit", params={"entity_id": item["id"]}).json()
+    changed_event = next(row for row in audit if row["event_type"] == "item.updated")
+    assert changed_event["payload"]["destination"] == "github"
+    assert "Destination." not in json.dumps(changed_event["payload"])

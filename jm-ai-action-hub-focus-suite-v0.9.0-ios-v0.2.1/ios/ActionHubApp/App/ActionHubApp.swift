@@ -30,8 +30,12 @@ struct ActionHubApp: App {
       switch phase {
       case .active:
         Task {
-          await model.biometricLock.unlock()
+          await model.biometricLock.unlockIfNeeded()
           model.handlePendingSystemRoute()
+          // On cold launch, scenePhase's initial transition to `.active` fires this at the same
+          // time as `.task { await model.start() }` below, which already does its own
+          // flush+refresh. Without this guard both ran concurrently, doubling every request.
+          guard !model.isStarting else { return }
           await model.flushCaptures()
           await model.refreshAll()
         }

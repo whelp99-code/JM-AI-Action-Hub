@@ -15,7 +15,7 @@ struct QRScannerView: UIViewControllerRepresentable {
   func updateUIViewController(_ uiViewController: QRScannerController, context: Context) {}
 }
 
-final class QRScannerController: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
+final class QRScannerController: UIViewController, @preconcurrency AVCaptureMetadataOutputObjectsDelegate {
   var onCode: ((String) -> Void)?
   var onError: ((String) -> Void)?
   private let session = AVCaptureSession()

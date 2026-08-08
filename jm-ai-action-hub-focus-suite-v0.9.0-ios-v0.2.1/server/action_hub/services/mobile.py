@@ -5,8 +5,7 @@ import hashlib
 import hmac
 import json
 import re
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, desc, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
@@ -40,6 +39,7 @@ from ..schemas import (
 )
 from .brief import build_daily_brief
 from .decision import build_decision_plan
+from .executor import TERMINAL_ITEM_STATES
 from .focus import dashboard_focus_summary
 from .mobile_auth import mobile_signing_secret
 from .planner import create_plan
@@ -75,26 +75,52 @@ def capabilities(settings: Settings) -> MobileCapabilities:
     )
 
 
+def _needs_review_item_filter():
+    # Shared between list_review_plans() and the dashboard review_count so the
+    # two can never drift on what counts as "still needs review". A terminal
+    # item (completed/rejected/skipped_duplicate/cancelled) is excluded even if
+    # some caller forgot to clear needs_review on the way there -- see
+    # state_sync.clear_needs_review for the call sites that do clear it, and
+    # treat this filter as the backstop for the ones that don't (yet).
+    return and_(
+        or_(
+            ActionItem.needs_review.is_(True),
+            ActionItem.state == ItemState.DRAFT.value,
+        ),
+        ActionItem.state.notin_(TERMINAL_ITEM_STATES),
+    )
+
+
 def list_review_plans(db: Session, limit: int = 50) -> list[ActionPlan]:
+    # LIMIT must apply to distinct plans, not joined item rows: a single plan
+    # with many needs_review items could otherwise exhaust the limit on its own
+    # and silently drop every other plan from the response. Select the plan ids
+    # first (DISTINCT + ORDER BY on a selected column, portable to Postgres),
+    # then fetch the full plans with eager loading in a second query.
+    plan_ids = list(
+        db.scalars(
+            select(ActionPlan.id, ActionPlan.updated_at)
+            .join(ActionItem)
+            .where(_needs_review_item_filter())
+            .distinct()
+            .order_by(desc(ActionPlan.updated_at))
+            .limit(limit)
+        )
+    )
+    if not plan_ids:
+        return []
     statement = (
         select(ActionPlan)
-        .join(ActionItem)
-        .where(
-            or_(
-                ActionItem.needs_review.is_(True),
-                ActionItem.state == ItemState.DRAFT.value,
-            )
-        )
+        .where(ActionPlan.id.in_(plan_ids))
         .options(
             selectinload(ActionPlan.items).selectinload(ActionItem.external_states),
             selectinload(ActionPlan.items).selectinload(ActionItem.worker_executions),
             selectinload(ActionPlan.items).selectinload(ActionItem.followups),
             selectinload(ActionPlan.inbox),
         )
-        .order_by(desc(ActionPlan.updated_at))
-        .limit(limit)
     )
-    return list(db.scalars(statement).unique())
+    plans_by_id = {plan.id: plan for plan in db.scalars(statement).unique()}
+    return [plans_by_id[plan_id] for plan_id in plan_ids if plan_id in plans_by_id]
 
 
 def _activity_category(event_type: str) -> str:
@@ -161,11 +187,16 @@ def build_mobile_dashboard(
         max_items=12,
         include_ai=True,
     )
+    # Counted in plans, matching list_review_plans() -- the review tab renders
+    # one row per plan, so a badge counted in items (S7) could show a number
+    # larger than the list the user taps into, which reads as a bug even though
+    # each number was individually correct for its own unit.
     review_count = int(
         db.scalar(
-            select(func.count(ActionItem.id)).where(
-                or_(ActionItem.needs_review.is_(True), ActionItem.state == ItemState.DRAFT.value)
-            )
+            select(func.count(func.distinct(ActionPlan.id)))
+            .select_from(ActionPlan)
+            .join(ActionItem)
+            .where(_needs_review_item_filter())
         )
         or 0
     )
@@ -205,7 +236,7 @@ def build_mobile_dashboard(
 
 def _encode_cursor(timestamp: datetime, audit_id: str, settings: Settings) -> str:
     payload = json.dumps(
-        {"ts": timestamp.astimezone(timezone.utc).isoformat(), "id": audit_id},
+        {"ts": timestamp.astimezone(UTC).isoformat(), "id": audit_id},
         separators=(",", ":"),
     ).encode("utf-8")
     segment = base64.urlsafe_b64encode(payload).rstrip(b"=").decode("ascii")
@@ -240,8 +271,8 @@ def _decode_cursor(cursor: str, settings: Settings) -> tuple[datetime, str]:
         if not audit_id or len(audit_id) > 128:
             raise ValueError("invalid cursor audit id")
         if timestamp.tzinfo is None:
-            timestamp = timestamp.replace(tzinfo=timezone.utc)
-        return timestamp.astimezone(timezone.utc), audit_id
+            timestamp = timestamp.replace(tzinfo=UTC)
+        return timestamp.astimezone(UTC), audit_id
     except Exception as exc:
         raise ValueError("Invalid mobile changes cursor") from exc
 

@@ -72,11 +72,12 @@ Focus 계층도 새로운 Todo 원장을 만들지 않는다. `execution_state`�
 - AI Worker 상태
 - Waiting/Follow-up
 - Activity Feed
-- Cursor 기반 Delta Sync
+- full refresh 기반 상태 동기화 (서버 Delta API는 호환성 유지)
 - APNs 알림
 - Focus 중심 Home Screen Widget
 - Siri·Shortcuts·App Intents의 Capture/Focus 진입점
 - Face ID/기기 인증 잠금
+- 서버 `failed` 영수증 5회 후 dead-letter, Settings에서 수동 복원/확정 삭제
 
 ## 아키텍처
 
@@ -156,18 +157,15 @@ action-hub mobile-pairing \
 
 ## 테스트
 
-Linux에서 실행 가능한 검증:
+현재 작업 환경에서 실행 가능한 정적/패키지 검증:
 
 ```text
-36 XCTest
-1 Swift Testing smoke
-53 Swift source parse
-swift-format strict lint
-Xcode project deterministic check
-OpenAPI contract check
-Privacy/Entitlement/Plist static check
-FastAPI–Swift live E2E
+swift build --package-path Packages/ActionHubCore --target ActionHubCore
+python3 scripts/validate_ios_project.py
+Xcode project deterministic check와 Privacy/Entitlement/Plist static check
 ```
+
+Core XCTest는 현재 작업 환경에 XCTest module이 없어 iOS-XCTEST PENDING 상태다. Full Xcode 환경에서 패키지 test와 아래 인수를 다시 실행한다.
 
 macOS/Apple 환경에서 추가해야 하는 인수:
 
@@ -205,6 +203,8 @@ TestFlight install
 ```bash
 bash scripts/verify_release.sh
 ```
+
+`verify_release.sh` 또는 정적 검사만으로 App Target/Extension build, signing, simulator/device 동작이나 TestFlight 배포가 검증되었다고 주장하지 않는다.
 
 macOS Release Archive:
 

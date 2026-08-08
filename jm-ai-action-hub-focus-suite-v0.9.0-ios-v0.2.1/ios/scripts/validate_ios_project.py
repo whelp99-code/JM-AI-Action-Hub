@@ -125,6 +125,43 @@ def main() -> int:
     check("Todoist" not in all_swift or "토큰" in all_swift, "Review direct provider credentials in iOS source")
     check(not re.search(r'http://(?!localhost|127\\.0\\.0\\.1|\\[::1\\])', all_swift), "Non-local cleartext server URL embedded")
 
+    app_model = (ROOT / "ActionHubApp" / "App" / "AppModel.swift").read_text(encoding="utf-8")
+    settings_view = (ROOT / "ActionHubApp" / "Features" / "Settings" / "SettingsView.swift").read_text(encoding="utf-8")
+    check(
+        app_model.count("MobileSession(store: credentialStore, appVersion: AppConfiguration.appVersion)") == 1,
+        "AppModel must inject AppConfiguration.appVersion into MobileSession",
+    )
+    check("deadLetterCaptureCount" in app_model, "AppModel must expose the offline dead-letter count")
+    check("func restoreAllDeadLetters() async" in app_model, "AppModel dead-letter restore operation missing")
+    check(
+        "func purgeAllDeadLetters(confirmed: Bool) async" in app_model
+        and "guard confirmed else { return }" in app_model,
+        "AppModel dead-letter purge must require explicit confirmation",
+    )
+    check("deadLetters(limit: 100)" in app_model, "AppModel must page dead-letter recovery at 100 records")
+    check("모두 복원" in settings_view, "Settings dead-letter restore control missing")
+    check("alert(\"Dead Letter 모두 삭제\"" in settings_view, "Settings dead-letter destructive confirmation missing")
+    check("복구 불가" in settings_view, "Settings dead-letter confirmation must state irreversibility")
+
+    http_transport = (
+        ROOT / "Packages" / "ActionHubCore" / "Sources" / "ActionHubCore" / "HTTPTransport.swift"
+    ).read_text(encoding="utf-8")
+    mobile_session = (
+        ROOT / "Packages" / "ActionHubCore" / "Sources" / "ActionHubCore" / "MobileSession.swift"
+    ).read_text(encoding="utf-8")
+    check(
+        '"JM-AI-Action-Hub-iOS/\\(sanitizedVersion(appVersion))"' in http_transport,
+        "HTTP transport must use the versioned JM-AI-Action-Hub-iOS User-Agent",
+    )
+    check(
+        "appVersion.wholeMatch(of: /[0-9]+\\.[0-9]+\\.[0-9]+/)" in http_transport,
+        "HTTP transport must accept only semantic app versions",
+    )
+    check(
+        "transport ?? URLSessionTransport(appVersion: appVersion)" in mobile_session,
+        "MobileSession must preserve an explicit transport and version its default transport",
+    )
+
     openapi = ROOT / "OpenAPI" / "action-hub.openapi.json"
     try:
         document = json.loads(openapi.read_text(encoding="utf-8"))

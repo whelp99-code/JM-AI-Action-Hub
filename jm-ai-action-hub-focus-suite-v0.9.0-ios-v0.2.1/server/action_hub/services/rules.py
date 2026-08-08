@@ -10,7 +10,6 @@ from ..models import ActionItem, ExecutorType, PersonalRule
 from ..schemas import ActionItemDraft
 from .audit import record_audit
 
-
 SAFE_RULE_FIELDS = {
     "project",
     "repository",

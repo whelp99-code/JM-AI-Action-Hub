@@ -2,15 +2,27 @@ from __future__ import annotations
 
 import enum
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
 
 def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def new_id() -> str:
@@ -27,22 +39,29 @@ class TZDateTime(TypeDecorator):
         if value is None:
             return None
         if value.tzinfo is None:
-            value = value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc).replace(tzinfo=None)
+            value = value.replace(tzinfo=UTC)
+        return value.astimezone(UTC).replace(tzinfo=None)
 
     def process_result_value(self, value, dialect):
         if value is None:
             return None
         if value.tzinfo is None:
-            return value.replace(tzinfo=timezone.utc)
-        return value.astimezone(timezone.utc)
+            return value.replace(tzinfo=UTC)
+        return value.astimezone(UTC)
 
 
 class Base(DeclarativeBase):
     pass
 
 
-class PlanStatus(str, enum.Enum):
+class LegacyStringEnum(enum.StrEnum):
+    """Use StrEnum while retaining the legacy ``str, Enum`` string form."""
+
+    def __str__(self) -> str:
+        return f"{type(self).__name__}.{self.name}"
+
+
+class PlanStatus(LegacyStringEnum):
     DRAFT = "draft"
     APPROVED = "approved"
     QUEUED = "queued"
@@ -53,7 +72,7 @@ class PlanStatus(str, enum.Enum):
     REJECTED = "rejected"
 
 
-class ItemState(str, enum.Enum):
+class ItemState(LegacyStringEnum):
     DRAFT = "draft"
     APPROVED = "approved"
     QUEUED = "queued"
@@ -72,7 +91,7 @@ class ItemState(str, enum.Enum):
     CANCELLED = "cancelled"
 
 
-class ActionType(str, enum.Enum):
+class ActionType(LegacyStringEnum):
     EVENT = "event"
     TODO = "todo"
     PROJECT_TASK = "project_task"
@@ -80,7 +99,7 @@ class ActionType(str, enum.Enum):
     NOTE = "note"
 
 
-class Destination(str, enum.Enum):
+class Destination(LegacyStringEnum):
     TODOIST = "todoist"
     GITHUB = "github"
     GOOGLE_CALENDAR = "google_calendar"
@@ -88,14 +107,14 @@ class Destination(str, enum.Enum):
     NONE = "none"
 
 
-class ExecutorType(str, enum.Enum):
+class ExecutorType(LegacyStringEnum):
     HUMAN = "human"
     AI = "ai"
     HYBRID = "hybrid"
     EXTERNAL = "external"
 
 
-class AttentionState(str, enum.Enum):
+class AttentionState(LegacyStringEnum):
     UNTRIAGED = "untriaged"
     CLASSIFIED = "classified"
     COMMITTED = "committed"
@@ -106,21 +125,21 @@ class AttentionState(str, enum.Enum):
     COMPLETED = "completed"
 
 
-class Quadrant(str, enum.Enum):
+class Quadrant(LegacyStringEnum):
     Q1 = "q1"
     Q2 = "q2"
     Q3 = "q3"
     Q4 = "q4"
 
 
-class FocusSessionState(str, enum.Enum):
+class FocusSessionState(LegacyStringEnum):
     RUNNING = "running"
     PAUSED = "paused"
     COMPLETED = "completed"
     ABANDONED = "abandoned"
 
 
-class TrafficState(str, enum.Enum):
+class TrafficState(LegacyStringEnum):
     GREEN = "green"
     YELLOW = "yellow"
     RED = "red"
@@ -139,7 +158,7 @@ class InboxEntry(Base):
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
 
-    plans: Mapped[list["ActionPlan"]] = relationship(back_populates="inbox", cascade="all, delete-orphan")
+    plans: Mapped[list[ActionPlan]] = relationship(back_populates="inbox", cascade="all, delete-orphan")
 
 
 class ActionPlan(Base):
@@ -156,7 +175,7 @@ class ActionPlan(Base):
     updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
 
     inbox: Mapped[InboxEntry] = relationship(back_populates="plans")
-    items: Mapped[list["ActionItem"]] = relationship(
+    items: Mapped[list[ActionItem]] = relationship(
         back_populates="plan", cascade="all, delete-orphan", order_by="ActionItem.created_at"
     )
 
@@ -217,28 +236,28 @@ class ActionItem(Base):
     updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
 
     plan: Mapped[ActionPlan] = relationship(back_populates="items")
-    external_states: Mapped[list["ExternalState"]] = relationship(
+    external_states: Mapped[list[ExternalState]] = relationship(
         back_populates="action_item", cascade="all, delete-orphan"
     )
-    worker_executions: Mapped[list["WorkerExecution"]] = relationship(
+    worker_executions: Mapped[list[WorkerExecution]] = relationship(
         back_populates="action_item", cascade="all, delete-orphan"
     )
-    followups: Mapped[list["FollowUp"]] = relationship(
+    followups: Mapped[list[FollowUp]] = relationship(
         back_populates="action_item", cascade="all, delete-orphan"
     )
-    priority_assessment: Mapped["PriorityAssessment | None"] = relationship(
+    priority_assessment: Mapped[PriorityAssessment | None] = relationship(
         back_populates="action_item", cascade="all, delete-orphan", uselist=False
     )
-    commitments: Mapped[list["DailyCommitment"]] = relationship(
+    commitments: Mapped[list[DailyCommitment]] = relationship(
         back_populates="action_item", cascade="all, delete-orphan"
     )
-    micro_steps: Mapped[list["MicroStep"]] = relationship(
+    micro_steps: Mapped[list[MicroStep]] = relationship(
         back_populates="action_item", cascade="all, delete-orphan", order_by="MicroStep.position"
     )
-    focus_sessions: Mapped[list["FocusSession"]] = relationship(
+    focus_sessions: Mapped[list[FocusSession]] = relationship(
         back_populates="action_item", cascade="all, delete-orphan"
     )
-    carry_over_decisions: Mapped[list["CarryOverDecision"]] = relationship(
+    carry_over_decisions: Mapped[list[CarryOverDecision]] = relationship(
         back_populates="action_item", cascade="all, delete-orphan"
     )
 
@@ -573,13 +592,13 @@ class MobileDevice(Base):
     created_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime(), default=utcnow, onupdate=utcnow)
 
-    refresh_tokens: Mapped[list["MobileRefreshToken"]] = relationship(
+    refresh_tokens: Mapped[list[MobileRefreshToken]] = relationship(
         back_populates="device", cascade="all, delete-orphan"
     )
-    captures: Mapped[list["MobileCapture"]] = relationship(
+    captures: Mapped[list[MobileCapture]] = relationship(
         back_populates="device", cascade="all, delete-orphan"
     )
-    push_notifications: Mapped[list["PushNotification"]] = relationship(
+    push_notifications: Mapped[list[PushNotification]] = relationship(
         back_populates="device", cascade="all, delete-orphan"
     )
 

@@ -8,6 +8,19 @@ public struct StoredMobileSession: Codable, Sendable, Equatable {
   public var refreshTokenExpiresAt: Date
   public var device: MobileDevice
 
+  // `convertToSnakeCase` and `convertFromSnakeCase` are not inverses for names ending in an
+  // acronym: `serverURL` encodes to `server_url`, which decodes back to `serverUrl`, so the
+  // synthesized key never matches and a stored session fails to load. Pinning the key to the
+  // decoder's camelCase form keeps the on-disk shape (`server_url`) unchanged.
+  enum CodingKeys: String, CodingKey {
+    case serverURL = "serverUrl"
+    case accessToken
+    case accessTokenExpiresAt
+    case refreshToken
+    case refreshTokenExpiresAt
+    case device
+  }
+
   public init(
     serverURL: URL,
     accessToken: String,

@@ -34,6 +34,7 @@ struct RootView: View {
 
 private struct LockView: View {
   @EnvironmentObject private var lock: BiometricLock
+  @State private var showDisableConfirmation = false
 
   var body: some View {
     VStack(spacing: 24) {
@@ -45,11 +46,33 @@ private struct LockView: View {
       Text("업무 내용과 AI 실행 상태를 보려면 기기 인증이 필요합니다.")
         .multilineTextAlignment(.center)
         .foregroundStyle(.secondary)
+      if let reason = lock.unavailableReason {
+        Text(reason)
+          .multilineTextAlignment(.center)
+          .font(.footnote)
+          .foregroundStyle(.red)
+          .padding(.horizontal)
+      }
       Button("Face ID로 열기") { Task { await lock.unlock() } }
         .buttonStyle(.borderedProminent)
+      // Reinstalling to escape a permanently locked screen loses the device pairing. This
+      // stays reachable even when `unavailableReason` is nil, so a user stuck for a reason we
+      // did not anticipate is never fully locked out either.
+      Button("잠금 기능 끄고 계속 사용", role: .destructive) { showDisableConfirmation = true }
+        .buttonStyle(.borderless)
+        .font(.footnote)
+        .padding(.top, 8)
     }
     .padding(32)
     .task { await lock.unlock() }
+    .confirmationDialog(
+      "잠금 기능을 끄면 기기 인증 없이 Action Hub를 열 수 있습니다. 설정에서 다시 켤 수 있습니다.",
+      isPresented: $showDisableConfirmation,
+      titleVisibility: .visible
+    ) {
+      Button("잠금 기능 끄기", role: .destructive) { lock.disableLockAndUnlock() }
+      Button("취소", role: .cancel) {}
+    }
   }
 }
 
@@ -82,7 +105,9 @@ private struct MainTabView: View {
         .tabItem { Label("설정", systemImage: "gearshape") }
         .tag(AppTab.settings)
     }
-    .overlay(alignment: .bottom) {
+    // Sits above the tab bar's trailing edge: centred on the bar it covered the middle tab
+    // ("검토"), making that tab untappable.
+    .overlay(alignment: .bottomTrailing) {
       Button {
         model.isCapturePresented = true
       } label: {
@@ -94,7 +119,8 @@ private struct MainTabView: View {
           .shadow(radius: 8, y: 4)
       }
       .accessibilityLabel("빠른 입력")
-      .offset(y: -8)
+      .padding(.trailing, 20)
+      .padding(.bottom, 68)
     }
     .sheet(isPresented: $model.isCapturePresented) {
       CaptureView()

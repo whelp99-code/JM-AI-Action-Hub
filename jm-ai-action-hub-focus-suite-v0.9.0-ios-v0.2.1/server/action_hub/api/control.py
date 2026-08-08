@@ -14,7 +14,6 @@ from ..services.webhooks import process_webhook_batch
 from ..worker import run_once
 from .dependencies import get_db
 
-
 control_router = APIRouter(
     prefix="/api/v1/control",
     tags=["control-loop"],

@@ -1,0 +1,17 @@
+{
+  "action_items": 2,
+  "action_plans": 1,
+  "alembic_head": "0003_operational_hardening",
+  "audit_events": 1,
+  "inbox_entries": 1,
+  "item_ids": [
+    "8c127d72-c772-4a24-a613-b433710f0376",
+    "bd41060d-5c6b-42e6-8dc7-66a84724cbe1"
+  ],
+  "plan_id": "2d3d1095-8677-45c2-9b2e-c9560b5ed6ec",
+  "revision_before": false,
+  "titles": [
+    "업그레이드 검증 미팅",
+    "제안서 보내기"
+  ]
+}

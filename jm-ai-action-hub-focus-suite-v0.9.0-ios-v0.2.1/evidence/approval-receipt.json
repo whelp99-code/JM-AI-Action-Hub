@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "sender": "Fable5",
+  "channelId": "current-authoritative-master-channel",
+  "receivedAt": "2026-08-02T16:26:58Z",
+  "decision": "APPROVED",
+  "planPath": "/Volumes/DevSpace/Playground/JM AI-OS Pack/JM-AI Action Hub/jm-ai-action-hub-focus-suite-v0.9.0-ios-v0.2.1/docs/IMPROVEMENT_PLAN_V1.md",
+  "planSha256": "f5f5bb5484080464382701a2bb08a781a128163fba52336b1b0ef807a4c0f4d0",
+  "planAdjustment": "CHECKPOINT-2026-08-03-CARD-00-03 adds server/tests/conftest.py; CHECKPOINT-2026-08-03-PHASE-0-REVIEW-FIX adds eight-file correction scope; requirements unchanged",
+  "currentPlanSha256AfterWave00": "82534b718f40799b15eb16f0c93bebfe47347be4eec5811afee49ac86c19387d",
+  "authorizedScope": [
+    "CARD-00-01",
+    "CARD-00-02",
+    "CARD-00-03"
+  ],
+  "prohibited": [
+    "commit",
+    "push",
+    "pull_request",
+    "merge",
+    "ios_device_signing",
+    "external_production_change"
+  ],
+  "source": "/Volumes/DevSpace/Playground/JM AI-OS Pack/ops/MASTER_REVIEW_ROUND1.md"
+}

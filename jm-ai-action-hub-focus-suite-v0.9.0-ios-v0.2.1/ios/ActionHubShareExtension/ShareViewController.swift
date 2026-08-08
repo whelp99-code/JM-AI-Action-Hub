@@ -92,6 +92,9 @@ final class ShareViewController: UIViewController {
 }
 
 extension NSItemProvider {
+  // Both loaders stay on the main actor: NSItemProvider is not Sendable, and the caller
+  // (a UIViewController) is main-actor-isolated, so crossing isolation would be unsafe.
+  @MainActor
   fileprivate func loadString(for typeIdentifier: String) async throws -> String? {
     try await withCheckedThrowingContinuation { continuation in
       loadItem(forTypeIdentifier: typeIdentifier, options: nil) { value, error in
@@ -110,6 +113,7 @@ extension NSItemProvider {
     }
   }
 
+  @MainActor
   fileprivate func loadURL(for typeIdentifier: String) async throws -> URL? {
     try await withCheckedThrowingContinuation { continuation in
       loadItem(forTypeIdentifier: typeIdentifier, options: nil) { value, error in

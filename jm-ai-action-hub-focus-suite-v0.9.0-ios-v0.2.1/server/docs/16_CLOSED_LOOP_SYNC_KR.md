@@ -75,7 +75,7 @@ Webhook 경로는 Action Hub API Key 대신 Provider Secret 서명을 사용한�
 | GitHub | `X-Hub-Signature-256: sha256=<hex>` |
 | Fireflies | `sha256=<hex>` HMAC 헤더 |
 
-Production에서 Secret이 없으면 503으로 거부한다. Development/Test에서는 로컬 Fixture를 위해 unsigned 수신을 허용하되 `signature_valid=false`로 기록한다.
+Unsigned webhook은 기본적으로 모든 환경에서 거부한다. Development/Test에서 로컬 Fixture가 필요한 경우에만 `ACTION_HUB_ALLOW_UNSIGNED_WEBHOOKS=true`를 명시적으로 설정해 수신할 수 있으며, 이때 `signature_valid=false`로 기록한다. Production은 이 flag 값과 관계없이 unsigned webhook을 항상 거부한다. 큐에 저장된 delivery도 처리 시점의 현재 환경과 unsigned 정책을 다시 검사하므로, opt-in을 해제하거나 Production으로 전환한 뒤에는 이전에 저장된 unsigned delivery도 처리되지 않는다.
 
 ### 4.3 중복 방지
 

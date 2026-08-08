@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 1,
+  "wave": "02",
+  "recordedAt": "2026-08-02T19:11:27Z",
+  "repositoryHead": "9c8f28d5a9eb34a2c30a869be620885023171977",
+  "deliveryState": "UNCOMMITTED_WORKTREE",
+  "orchestration": {
+    "runId": "run_4efa4f962b2c",
+    "CARD-02-01": "task_593db293c4c7",
+    "CARD-02-02": "task_a6669ac3837a",
+    "CARD-02-02-R1": "task_99a97c3e587d",
+    "CARD-02-03": "task_ab7f07bfc4de",
+    "CARD-02-04": "task_eea6a0bcd1a7"
+  },
+  "cardStatus": {
+    "CARD-02-01": "LOCAL_PASS_IMPLEMENTED",
+    "CARD-02-02": "DONE",
+    "CARD-02-02-R1": "DONE",
+    "CARD-02-03": "BLOCKED_NO_IMPLEMENTATION_FILES_CHANGED",
+    "CARD-02-04-remainder": "PENDING"
+  },
+  "verification": {
+    "CARD-02-01": [
+      {
+        "command": "cd ios && swift test --package-path Packages/ActionHubCore --filter HTTPTransportTests",
+        "exitCode": 1,
+        "state": "iOS-XCTEST PENDING (Full Xcode 필요)",
+        "summary": "no such module XCTest; tests did not execute"
+      },
+      {
+        "command": "cd ios && swift build --package-path Packages/ActionHubCore --target ActionHubCore",
+        "exitCode": 0
+      },
+      {
+        "command": "cd ios && python3 scripts/validate_ios_project.py",
+        "exitCode": 0,
+        "summary": "IOS_PROJECT_STATIC_OK sources=30"
+      },
+      {
+        "command": "cd ios && rg -n 'JM-AI-Action-Hub-iOS/0\\.1' .",
+        "exitCode": 1,
+        "expectedExitCode": 1,
+        "summary": "zero stale User-Agent matches"
+      },
+      {
+        "command": "git diff --check -- ios",
+        "exitCode": 0
+      }
+    ],
+    "CARD-02-02-final": [
+      {
+        "command": "cd server && make docs-check",
+        "exitCode": 0,
+        "summary": "DOCS_CHECK_OK stale_count=0 required_count=6"
+      },
+      {
+        "command": "cd ios && python3 scripts/validate_ios_project.py",
+        "exitCode": 0,
+        "summary": "IOS_PROJECT_STATIC_OK sources=30"
+      },
+      {
+        "command": "git diff --check",
+        "exitCode": 0
+      }
+    ]
+  },
+  "revisionLoop": {
+    "finding": {
+      "severity": "MEDIUM",
+      "card": "CARD-02-02",
+      "summary": "Still-current known limitations were removed while the structural documentation gate remained green.",
+      "state": "CLOSED"
+    },
+    "correctionTask": "task_99a97c3e587d"
+  },
+  "blocker": {
+    "card": "CARD-02-03",
+    "fact": "server/action_hub/config.py defines mobile_recommended_ios_app_version as 0.2.1, but server/.env.example lacks ACTION_HUB_MOBILE_RECOMMENDED_IOS_APP_VERSION required by the approved exhaustive template contract.",
+    "scopeConflict": "server/.env.example is not in CARD-02-03 ownership.",
+    "licenseNotice": "Root LICENSE and NOTICE are absent; legal text must not be invented.",
+    "recommended": "Authorize one line in server/.env.example: ACTION_HUB_MOBILE_RECOMMENDED_IOS_APP_VERSION=0.2.1, and clarify that allowlisted LICENSE/NOTICE are included only when present.",
+    "alternative": "Keep the existing ownership and exact-presence interpretation; CARD-02-03 and Wave 02 remain blocked pending owner-supplied LICENSE/NOTICE and template correction."
+  },
+  "routingCorrection": {
+    "initialDispatch": "ctx_1236b57da707",
+    "observedModel": "Qwen3.8 Max Preview",
+    "state": "STOPPED_AND_ABANDONED",
+    "acceptedForCompletion": false,
+    "terraRetryDispatch": "ctx_bdc9e917d9c4",
+    "terraModel": "gpt-5.6-terra",
+    "summary": "The partial in-scope User-Agent hunk was preserved, inspected, completed, and independently verified by Terra and Sol."
+  },
+  "prohibitedActionsObserved": {
+    "commit": false,
+    "stage": false,
+    "push": false,
+    "pullRequest": false,
+    "merge": false,
+    "deployment": false,
+    "xcodeInstall": false,
+    "iosDeviceSigning": false
+  }
+}

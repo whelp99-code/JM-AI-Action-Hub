@@ -13,7 +13,6 @@ from ..schemas import InboxParseRequest
 from .audit import record_audit
 from .planner import create_plan
 
-
 FIREFLIES_TRANSCRIPT_QUERY = """
 query Transcript($transcriptId: String!) {
   transcript(id: $transcriptId) {

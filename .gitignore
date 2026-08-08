@@ -30,3 +30,5 @@
 **/*.db-*
 **/data/exports/*
 **/backups/*
+
+.serena/

@@ -1,0 +1,8 @@
+{
+  "claim_uri_host": "pair",
+  "claim_uri_scheme": "jmactionhub",
+  "pairing_code_or_token_included": false,
+  "qr_type": "jm-ai-action-hub-pairing",
+  "qr_version": 1,
+  "status": "ok"
+}

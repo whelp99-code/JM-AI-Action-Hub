@@ -16,6 +16,8 @@ from sqlalchemy import inspect, select
 from action_hub.config import Settings
 from action_hub.main import create_app
 from action_hub.models import (
+    ActionItem,
+    ItemState,
     MobileCapture,
     MobileDevice,
     MobilePairingSession,
@@ -24,7 +26,7 @@ from action_hub.models import (
     utcnow,
 )
 from action_hub.services import mobile as mobile_service
-from action_hub.services.mobile_auth import MobileAuthError, decode_access_token
+from action_hub.services.mobile_auth import MobileAuthError, decode_access_token, mobile_signing_secret
 from action_hub.services.push import queue_push
 
 
@@ -72,12 +74,185 @@ def _signed_token(payload: dict, settings: Settings) -> str:
     body = segment(payload)
     signature = base64.urlsafe_b64encode(
         hmac.new(
-            b"test-mobile-token-secret-00000000000000000000",
+            settings.mobile_access_token_secret.encode("utf-8"),
             f"{header}.{body}".encode("ascii"),
             hashlib.sha256,
         ).digest()
     ).rstrip(b"=").decode("ascii")
     return f"{header}.{body}.{signature}"
+
+
+def _mobile_state_counts(app) -> tuple[int, int, int]:
+    with app.state.database.session_factory() as db:
+        return (
+            len(list(db.scalars(select(MobilePairingSession)))),
+            len(list(db.scalars(select(MobileDevice)))),
+            len(list(db.scalars(select(MobileRefreshToken)))),
+        )
+
+
+def test_explicit_mobile_secret_is_preferred_for_signing():
+    settings = Settings(
+        app_env="development",
+        api_key="a" * 32,
+        mobile_access_token_secret="m" * 48,
+    )
+    assert mobile_signing_secret(settings) == ("m" * 48).encode("utf-8")
+
+
+def test_development_api_key_fallback_uses_domain_separated_hkdf_vector():
+    settings = Settings(app_env="development", api_key="a" * 32)
+    derived = mobile_signing_secret(settings)
+    assert len(derived) == 32
+    assert derived != settings.api_key.encode("utf-8")
+    assert derived.hex() == "bf1d6bcac5a2cc5e9780c35384e7f5115c28342167c111dee1e7c42f69896e18"
+    assert mobile_signing_secret(settings) == derived
+
+
+@pytest.mark.parametrize(
+    ("mobile_secret", "expected_code", "expected_detail"),
+    [
+        (
+            "s" * 40,
+            "mobile_secret_reuses_admin_key",
+            "Mobile access token secret must differ from the administrative API key",
+        ),
+        (
+            "change-me-mobile-token-secret-before-use",
+            "mobile_auth_not_configured",
+            "Mobile access token secret is not configured",
+        ),
+    ],
+)
+def test_mobile_secret_misconfiguration_rejects_pairing_without_state_change(
+    tmp_path, mobile_secret, expected_code, expected_detail
+):
+    api_key = "s" * 40
+    settings = Settings(
+        app_env="test",
+        api_key=api_key,
+        mobile_access_token_secret=mobile_secret,
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'invalid-mobile-secret.db'}",
+        data_dir=tmp_path,
+    )
+    with pytest.raises(MobileAuthError) as error:
+        mobile_signing_secret(settings)
+    assert error.value.code == expected_code
+    app = create_app(settings)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/mobile/pairings",
+            headers={"X-Action-Hub-Key": api_key},
+            json={"public_base_url": "https://hub.example.test"},
+        )
+        assert response.status_code == 503
+        assert response.json()["detail"] == expected_detail
+    assert _mobile_state_counts(app) == (0, 0, 0)
+
+
+def test_production_missing_mobile_secret_rejects_pairing_without_state_change(tmp_path):
+    settings = Settings(
+        app_env="production",
+        api_key="a" * 40,
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'production-mobile-secret.db'}",
+        data_dir=tmp_path,
+    )
+    with pytest.raises(MobileAuthError) as error:
+        mobile_signing_secret(settings)
+    assert error.value.code == "mobile_auth_not_configured"
+    app = create_app(settings)
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/mobile/pairings",
+            headers={"X-Action-Hub-Key": settings.api_key},
+            json={"public_base_url": "https://hub.example.test"},
+        )
+        assert response.status_code == 503
+        assert response.json()["detail"] == "Mobile access token secret is not configured"
+    assert _mobile_state_counts(app) == (0, 0, 0)
+
+
+@pytest.mark.parametrize(
+    ("configured_secret", "expected_detail"),
+    [
+        (None, "Mobile access token secret is not configured"),
+        (
+            "change-me-mobile-token-secret-before-use",
+            "Mobile access token secret is not configured",
+        ),
+        ("__ADMIN_API_KEY__", "Mobile access token secret must differ from the administrative API key"),
+    ],
+)
+def test_mobile_configuration_failure_precedes_claim_refresh_and_bearer_processing(
+    tmp_path, configured_secret, expected_detail
+):
+    api_key = "a" * 40
+    settings = Settings(
+        app_env="test",
+        api_key=api_key,
+        mobile_access_token_secret="m" * 48,
+        database_url=f"sqlite+pysqlite:///{tmp_path / 'mobile-config-order.db'}",
+        data_dir=tmp_path,
+    )
+    app = create_app(settings)
+    with TestClient(app) as client:
+        client.headers["X-Action-Hub-Key"] = api_key
+        pending = client.post(
+            "/api/v1/mobile/pairings",
+            json={"public_base_url": "https://hub.example.test"},
+        ).json()
+        tokens = _pair(client)
+        before_counts = _mobile_state_counts(app)
+        refresh_id = tokens["refresh_token"].removeprefix("ahmr_").split(".", 1)[0]
+
+        settings.mobile_access_token_secret = (
+            api_key if configured_secret == "__ADMIN_API_KEY__" else configured_secret
+        )
+        claim_payload = {
+            "code": pending["code"],
+            "device_name": "Blocked iPhone",
+        }
+        missing_claim = client.post(
+            "/api/v1/mobile/pairings/claim",
+            json={**claim_payload, "pairing_id": "missing"},
+        )
+        existing_claim = client.post(
+            "/api/v1/mobile/pairings/claim",
+            json={**claim_payload, "pairing_id": pending["pairing_id"]},
+        )
+        malformed_refresh = client.post(
+            "/api/v1/mobile/token/refresh",
+            json={"refresh_token": "x" * 40},
+        )
+        existing_refresh = client.post(
+            "/api/v1/mobile/token/refresh",
+            json={"refresh_token": tokens["refresh_token"]},
+        )
+        missing_bearer = client.get("/api/v1/mobile/dashboard")
+        wrong_bearer = client.get(
+            "/api/v1/mobile/dashboard", headers={"Authorization": "Bearer wrong"}
+        )
+        valid_bearer = client.get("/api/v1/mobile/dashboard", headers=_auth(tokens))
+
+    for response in (
+        missing_claim,
+        existing_claim,
+        malformed_refresh,
+        existing_refresh,
+        missing_bearer,
+        wrong_bearer,
+        valid_bearer,
+    ):
+        assert response.status_code == 503
+        assert response.json()["detail"] == expected_detail
+    assert _mobile_state_counts(app) == before_counts
+    with app.state.database.session_factory() as db:
+        pairing = db.get(MobilePairingSession, pending["pairing_id"])
+        refresh = db.get(MobileRefreshToken, refresh_id)
+        device = db.get(MobileDevice, tokens["device"]["id"])
+        assert pairing is not None and pairing.status == "pending" and pairing.attempts == 0
+        assert refresh is not None and refresh.consumed_at is None and refresh.revoked_at is None
+        assert device is not None and device.status == "active"
 
 
 def test_mobile_migration_and_capabilities(client, settings):
@@ -137,7 +312,7 @@ def test_pairing_rejects_bad_code_and_expires_after_attempt_limit(client):
         "/api/v1/mobile/pairings",
         json={"public_base_url": "https://hub.example.test"},
     ).json()
-    for attempt in range(5):
+    for _attempt in range(5):
         response = client.post(
             "/api/v1/mobile/pairings/claim",
             json={
@@ -371,7 +546,11 @@ def test_mobile_capture_batch_is_idempotent_and_exposes_review(client):
     conflicting["captures"] = [dict(payload["captures"][0], text="다른 내용")]
     conflict = client.post("/api/v1/mobile/captures/batch", json=conflicting, headers=headers)
     assert conflict.status_code == 200
-    assert conflict.json()["receipts"][0]["status"] == "failed"
+    failed_receipt = conflict.json()["receipts"][0]
+    assert failed_receipt["client_capture_id"] == capture_id
+    assert failed_receipt["status"] == "failed"
+    assert failed_receipt["plan_id"] == receipt["plan_id"]
+    assert isinstance(failed_receipt["error"], str) and failed_receipt["error"]
 
     review = client.get("/api/v1/mobile/review", headers=headers)
     assert review.status_code == 200
@@ -597,6 +776,139 @@ def test_mobile_revision_conflict_and_approval_execution(client):
     assert execute.json()["completed"] == 1
 
 
+def test_mobile_approve_clears_review_flag_and_drops_from_review_list(client):
+    # Regression for RV-01: the review tab showed no visible change after tapping
+    # 승인 because approve_plan() left needs_review=True on approved items, so the
+    # item stayed matched by the "needs_review OR draft" review-list filter.
+    tokens = _pair(client)
+    headers = _auth(tokens)
+    response = client.post(
+        "/api/v1/mobile/captures/batch",
+        headers=headers,
+        json={
+            "captures": [
+                {
+                    "client_capture_id": str(uuid.uuid4()),
+                    "text": "내일 고객 미팅",
+                    "reference_time": "2026-07-30T09:00:00+09:00",
+                }
+            ]
+        },
+    ).json()
+    plan_id = response["receipts"][0]["plan_id"]
+    plan = client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+    item = plan["items"][0]
+    assert item["needs_review"] is True
+    review_reason = item["review_reason"]
+    assert review_reason
+
+    review_before = client.get("/api/v1/mobile/review", headers=headers)
+    assert any(p["id"] == plan_id for p in review_before.json())
+
+    approve = client.post(
+        f"/api/v1/mobile/plans/{plan_id}/approve",
+        headers=headers,
+        json={
+            "item_ids": [item["id"]],
+            "expected_plan_revision": plan["revision"],
+            "force_review_items": True,
+        },
+    )
+    assert approve.status_code == 200, approve.text
+    approved_item = approve.json()["items"][0]
+    assert approved_item["state"] == "approved"
+    assert approved_item["needs_review"] is False
+    # The reason history must survive the flag being cleared.
+    assert approved_item["review_reason"] == review_reason
+    assert approve.json()["blocked_item_ids"] == []
+
+    review_after = client.get("/api/v1/mobile/review", headers=headers)
+    assert all(p["id"] != plan_id for p in review_after.json())
+
+
+def test_mobile_approve_without_force_surfaces_blocked_items(client):
+    # Regression for RV-01 candidate (b): approving without force_review_items on
+    # an item that still needs review must not look like unconditional success.
+    # The item stays blocked and the response must say so via blocked_item_ids.
+    tokens = _pair(client)
+    headers = _auth(tokens)
+    response = client.post(
+        "/api/v1/mobile/captures/batch",
+        headers=headers,
+        json={
+            "captures": [
+                {
+                    "client_capture_id": str(uuid.uuid4()),
+                    "text": "내일 고객 미팅",
+                    "reference_time": "2026-07-30T09:00:00+09:00",
+                }
+            ]
+        },
+    ).json()
+    plan_id = response["receipts"][0]["plan_id"]
+    plan = client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+    item = plan["items"][0]
+    assert item["needs_review"] is True
+
+    approve = client.post(
+        f"/api/v1/mobile/plans/{plan_id}/approve",
+        headers=headers,
+        json={
+            "item_ids": [item["id"]],
+            "expected_plan_revision": plan["revision"],
+        },
+    )
+    assert approve.status_code == 200, approve.text
+    body = approve.json()
+    assert body["items"][0]["state"] == "draft"
+    assert body["items"][0]["needs_review"] is True
+    assert body["blocked_item_ids"] == [item["id"]]
+
+
+def test_mobile_reject_clears_review_flag_and_drops_from_review_list(client):
+    # Regression for RV-01: 전체 제외 (reject) suffered the identical bug as
+    # approve -- reject_items() never cleared needs_review, so a rejected item
+    # stayed matched by the review-list filter forever, looking untouched.
+    tokens = _pair(client)
+    headers = _auth(tokens)
+    response = client.post(
+        "/api/v1/mobile/captures/batch",
+        headers=headers,
+        json={
+            "captures": [
+                {
+                    "client_capture_id": str(uuid.uuid4()),
+                    "text": "내일 고객 미팅",
+                    "reference_time": "2026-07-30T09:00:00+09:00",
+                }
+            ]
+        },
+    ).json()
+    plan_id = response["receipts"][0]["plan_id"]
+    plan = client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+    item = plan["items"][0]
+    assert item["needs_review"] is True
+    review_reason = item["review_reason"]
+
+    reject = client.post(
+        f"/api/v1/mobile/plans/{plan_id}/reject",
+        headers=headers,
+        json={
+            "item_ids": [item["id"]],
+            "reason": "iOS에서 제외",
+            "expected_plan_revision": plan["revision"],
+        },
+    )
+    assert reject.status_code == 200, reject.text
+    rejected_item = reject.json()["items"][0]
+    assert rejected_item["state"] == "rejected"
+    assert rejected_item["needs_review"] is False
+    assert rejected_item["review_reason"] == review_reason
+
+    review_after = client.get("/api/v1/mobile/review", headers=headers)
+    assert all(p["id"] != plan_id for p in review_after.json())
+
+
 def test_mobile_changes_cursor_and_activity(client):
     tokens = _pair(client)
     headers = _auth(tokens)
@@ -813,3 +1125,189 @@ def test_pairing_qr_svg_and_ascii(tmp_path):
     rendered = output.getvalue()
     assert len(rendered.splitlines()) > 10
     assert "█" in rendered
+
+
+def test_mobile_execute_reports_retrying_items_and_errors_instead_of_hiding_failure(settings):
+    # Same regression as test_api_workflow.py's plain /api/v1 coverage, but
+    # through the mobile router. P0-2 requires api/mobile.py and api/routes.py
+    # to share one execution-summary implementation (build_execution_summary)
+    # so a fix to one cannot silently drift from the other, as they already had
+    # (mobile lacked the failed/pending accounting the plain API had).
+    live_settings = settings.model_copy(update={"execution_mode": "live"})
+    with TestClient(create_app(live_settings)) as live_client:
+        live_client.headers["X-Action-Hub-Key"] = live_settings.api_key
+        tokens = _pair(live_client)
+        headers = _auth(tokens)
+        capture = live_client.post(
+            "/api/v1/mobile/captures/batch",
+            headers=headers,
+            json={
+                "captures": [
+                    {
+                        "client_capture_id": str(uuid.uuid4()),
+                        "text": "repo:owner/repo 로그인 오류를 codex로 수정",
+                        "reference_time": "2026-07-30T09:00:00+09:00",
+                    }
+                ]
+            },
+        ).json()
+        plan_id = capture["receipts"][0]["plan_id"]
+        plan = live_client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+        item = plan["items"][0]
+        assert item["destination"] == "github"
+        approve = live_client.post(
+            f"/api/v1/mobile/plans/{plan_id}/approve",
+            headers=headers,
+            json={"expected_plan_revision": plan["revision"]},
+        )
+        assert approve.status_code == 200, approve.text
+        execute = live_client.post(
+            f"/api/v1/mobile/plans/{plan_id}/execute",
+            headers=headers,
+            json={"expected_plan_revision": approve.json()["revision"]},
+        )
+
+    assert execute.status_code == 200, execute.text
+    body = execute.json()
+    assert body["failed"] == 0
+    assert body["retrying"] == 1
+    assert len(body["errors"]) == 1
+    assert body["errors"][0]["item_id"] == item["id"]
+    assert "GITHUB_TOKEN" in body["errors"][0]["error"]
+
+
+def test_dashboard_review_count_matches_plan_unit_not_item_unit(client):
+    # Regression for S7: the badge (review_count) counted ActionItem rows while
+    # the list it links to (list_review_plans) returns one row per ActionPlan.
+    # A plan with 2 needs_review items made the badge read 2 while the list the
+    # user taps into showed 1 plan -- individually correct per unit, but reads
+    # as a bug side by side. Badge is aligned to the list's plan unit.
+    tokens = _pair(client)
+    headers = _auth(tokens)
+    capture = client.post(
+        "/api/v1/mobile/captures/batch",
+        headers=headers,
+        json={
+            "captures": [
+                {
+                    "client_capture_id": str(uuid.uuid4()),
+                    "text": "내일 고객 미팅\n모레 협력사 미팅",
+                    "reference_time": "2026-07-30T09:00:00+09:00",
+                }
+            ]
+        },
+    ).json()
+    plan_id = capture["receipts"][0]["plan_id"]
+    plan = client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+    assert len(plan["items"]) == 2
+    assert all(item["needs_review"] for item in plan["items"])
+
+    review = client.get("/api/v1/mobile/review", headers=headers)
+    assert review.status_code == 200
+    assert len(review.json()) == 1
+
+    dashboard = client.get("/api/v1/mobile/dashboard", headers=headers)
+    assert dashboard.status_code == 200
+    assert dashboard.json()["review_count"] == 1
+
+
+def test_review_list_and_badge_exclude_terminal_states_even_if_needs_review_lingers(client):
+    # Regression for P1-4's root cause: the review-list filter and the
+    # dashboard badge only checked needs_review/DRAFT and never excluded
+    # terminal states. Approve/reject were fixed today to clear needs_review
+    # explicitly, but that leaves every future caller one missed line away
+    # from the same bug. The filter itself must exclude terminal states
+    # regardless of whether the flag was cleared.
+    tokens = _pair(client)
+    headers = _auth(tokens)
+    capture = client.post(
+        "/api/v1/mobile/captures/batch",
+        headers=headers,
+        json={
+            "captures": [
+                {
+                    "client_capture_id": str(uuid.uuid4()),
+                    "text": "내일 고객 미팅",
+                    "reference_time": "2026-07-30T09:00:00+09:00",
+                }
+            ]
+        },
+    ).json()
+    plan_id = capture["receipts"][0]["plan_id"]
+    plan = client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+    item = plan["items"][0]
+    assert item["needs_review"] is True
+
+    with client.app.state.database.session_factory() as db:
+        row = db.get(ActionItem, item["id"])
+        row.state = ItemState.CANCELLED.value
+        db.commit()
+
+    review_after = client.get("/api/v1/mobile/review", headers=headers)
+    assert all(p["id"] != plan_id for p in review_after.json())
+
+    dashboard = client.get("/api/v1/mobile/dashboard", headers=headers)
+    assert dashboard.json()["review_count"] == 0
+
+
+def test_review_list_limit_is_plan_scoped_not_join_row_scoped(client):
+    # Regression for S8: list_review_plans() joined ActionPlan to ActionItem
+    # and applied LIMIT to that joined query, so LIMIT bounded item rows, not
+    # distinct plans. A single busy plan with >= limit needs_review items could
+    # exhaust the limit by itself and silently drop every other plan from the
+    # response.
+    from action_hub.models import ActionPlan, InboxEntry
+    from action_hub.services import mobile as mobile_service
+
+    with client.app.state.database.session_factory() as db:
+        busy_inbox = InboxEntry(raw_text="busy", timezone="Asia/Seoul", fingerprint="busy-inbox".ljust(64, "0"))
+        db.add(busy_inbox)
+        db.flush()
+        busy_plan = ActionPlan(inbox_id=busy_inbox.id, reference_time=utcnow())
+        db.add(busy_plan)
+        db.flush()
+        busy_plan_id = busy_plan.id
+        for i in range(5):
+            db.add(
+                ActionItem(
+                    plan_id=busy_plan_id,
+                    item_type="todo",
+                    destination="none",
+                    title=f"busy {i}",
+                    fingerprint=f"busy-item-{i}".ljust(64, "0"),
+                    needs_review=True,
+                    review_reason="test",
+                )
+            )
+
+        other_plan_ids = []
+        for j in range(2):
+            inbox = InboxEntry(
+                raw_text=f"other{j}", timezone="Asia/Seoul", fingerprint=f"other-inbox-{j}".ljust(64, "0")
+            )
+            db.add(inbox)
+            db.flush()
+            plan = ActionPlan(inbox_id=inbox.id, reference_time=utcnow())
+            db.add(plan)
+            db.flush()
+            other_plan_ids.append(plan.id)
+            db.add(
+                ActionItem(
+                    plan_id=plan.id,
+                    item_type="todo",
+                    destination="none",
+                    title=f"other {j}",
+                    fingerprint=f"other-item-{j}".ljust(64, "0"),
+                    needs_review=True,
+                    review_reason="test",
+                )
+            )
+        db.commit()
+
+        plans = mobile_service.list_review_plans(db, limit=3)
+        returned_ids = {plan.id for plan in plans}
+
+    assert len(plans) == 3
+    assert busy_plan_id in returned_ids
+    assert other_plan_ids[0] in returned_ids
+    assert other_plan_ids[1] in returned_ids

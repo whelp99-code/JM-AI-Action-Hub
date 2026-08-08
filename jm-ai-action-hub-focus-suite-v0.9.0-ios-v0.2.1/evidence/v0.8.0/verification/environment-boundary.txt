@@ -1,0 +1,2 @@
+Validated: Linux Python/Swift source, OpenAPI, migration, live HTTP contract.
+Not executed: Xcode iOS SDK link, code signing, physical iPhone, APNs live, TestFlight.

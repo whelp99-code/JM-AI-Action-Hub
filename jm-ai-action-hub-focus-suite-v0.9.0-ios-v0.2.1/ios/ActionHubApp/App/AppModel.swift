@@ -21,8 +21,11 @@ final class AppModel: ObservableObject {
   @Published private(set) var activeFocus: FocusSession?
   @Published private(set) var focusWeeklyReport: FocusWeeklyReport?
   @Published private(set) var pendingCaptureCount = 0
+  @Published private(set) var deadLetterCaptureCount = 0
+  @Published private(set) var deadLetters: [OfflineCaptureDeadLetter] = []
   @Published var notificationPreferences = NotificationPreferences()
   @Published var isRefreshing = false
+  @Published private(set) var isStarting = false
   @Published var lastError: String?
   @Published var selectedTab: AppTab = .today
   @Published var focusRequestedSection: String?
@@ -33,7 +36,7 @@ final class AppModel: ObservableObject {
 
   let biometricLock = BiometricLock()
   private let credentialStore = KeychainCredentialStore()
-  private lazy var session = MobileSession(store: credentialStore)
+  private lazy var session = MobileSession(store: credentialStore, appVersion: AppConfiguration.appVersion)
   private var appGroupStore: AppGroupStore?
   private var captureQueue: OfflineCaptureQueue?
   private let liveActivity = FocusLiveActivityManager()
@@ -49,6 +52,11 @@ final class AppModel: ObservableObject {
   }
 
   func start() async {
+    // Guards the foreground (`scenePhase == .active`) sync path against racing this same sync
+    // work on cold launch -- `.task { start() }` and the initial `.active` transition otherwise
+    // fire together and double every request. See ActionHubApp.swift.
+    isStarting = true
+    defer { isStarting = false }
     do {
       let restored = try await session.restore()
       guard let restored else {
@@ -57,8 +65,7 @@ final class AppModel: ObservableObject {
         return
       }
       connectionState = .connected(deviceName: restored.device.deviceName)
-      notificationPreferences = NotificationPreferences(
-        dictionary: restored.device.notificationPreferences)
+      notificationPreferences = restored.device.notificationPreferences
       NotificationManager.shared.registerIfAuthorized()
       await refreshAll()
       handlePendingSystemRoute()
@@ -88,13 +95,13 @@ final class AppModel: ObservableObject {
         )
       )
       connectionState = .connected(deviceName: device.deviceName)
-      notificationPreferences = NotificationPreferences(dictionary: device.notificationPreferences)
+      notificationPreferences = device.notificationPreferences
       lastError = nil
       await flushCaptures()
       await refreshAll()
       NotificationManager.shared.requestAuthorizationAndRegister()
     } catch {
-      lastError = error.localizedDescription
+      handle(error)
       connectionState = .disconnected
     }
   }
@@ -119,13 +126,13 @@ final class AppModel: ObservableObject {
     -> MobileDevice
   {
     let device = try await session.updateNotificationPreferences(preferences)
-    notificationPreferences = NotificationPreferences(dictionary: device.notificationPreferences)
+    notificationPreferences = device.notificationPreferences
     return device
   }
 
   func disconnect() async {
     do { try await session.disconnect(revokeServer: true) } catch {
-      lastError = error.localizedDescription
+      handle(error)
     }
     dashboard = nil
     reviewPlans = []
@@ -139,38 +146,39 @@ final class AppModel: ObservableObject {
     connectionState = .disconnected
   }
 
+  /// Entry point for `.refreshable`. SwiftUI cancels the task backing a pull-to-refresh as
+  /// soon as the gesture resolves, which cancelled the in-flight URLSession requests and
+  /// surfaced as a "cancelled" network error. An unstructured task does not inherit that
+  /// cancellation, so the refresh runs to completion either way.
+  func refreshAllDetached() async {
+    await Task { await self.refreshAll() }.value
+  }
+
   func refreshAll() async {
     guard case .connected = connectionState else { return }
+    // Re-entrancy guard: every scenePhase == .active transition (including the one right
+    // after a system sheet -- permission dialog, share sheet, camera -- closes) calls this.
+    // Without the guard, overlapping calls raced and the response that finished last could
+    // overwrite fresher state with stale data.
+    guard !isRefreshing else { return }
     isRefreshing = true
     defer { isRefreshing = false }
     do {
-      async let dashboardRequest = session.dashboard(currentAppVersion: AppConfiguration.appVersion)
-      async let reviewRequest = session.reviewPlans(limit: 50)
-      async let activityRequest = session.activity(limit: 50)
-      async let triageRequest = session.focusTriage(limit: 100)
-      async let matrixRequest = session.focusMatrix(limitPerQuadrant: 100)
-      async let big3Request = session.big3()
-      async let activeFocusRequest = session.activeFocusSession()
-      let (newDashboard, newReview, newActivity, newTriage, newMatrix, newBig3, newActiveFocus) =
-        try await (
-          dashboardRequest, reviewRequest, activityRequest, triageRequest, matrixRequest,
-          big3Request,
-          activeFocusRequest
-        )
-      dashboard = newDashboard
-      reviewPlans = newReview
-      activity = newActivity
-      triage = newTriage
-      matrix = newMatrix
-      big3 = newBig3
-      activeFocus = newActiveFocus
-      if let newActiveFocus {
-        await liveActivity.update(session: newActiveFocus)
+      let snapshot = try await session.refreshSnapshot(
+        currentAppVersion: AppConfiguration.appVersion)
+      dashboard = snapshot.dashboard
+      reviewPlans = snapshot.review
+      activity = snapshot.activity
+      triage = snapshot.triage
+      matrix = snapshot.matrix
+      big3 = snapshot.big3
+      activeFocus = snapshot.activeFocus
+      if let activeFocus = snapshot.activeFocus {
+        await liveActivity.update(session: activeFocus)
       } else {
         await liveActivity.end()
       }
-      try appGroupStore?.writeWidgetSnapshot(WidgetSnapshot(dashboard: newDashboard))
-      try await synchronizeChanges()
+      try appGroupStore?.writeWidgetSnapshot(WidgetSnapshot(dashboard: snapshot.dashboard))
       lastError = nil
     } catch {
       handle(error)
@@ -193,7 +201,7 @@ final class AppModel: ObservableObject {
       if case .connected = connectionState { await flushCaptures() }
       return true
     } catch {
-      lastError = error.localizedDescription
+      handle(error)
       return false
     }
   }
@@ -214,9 +222,85 @@ final class AppModel: ObservableObject {
         try appGroupStore?.writeWidgetSnapshot(WidgetSnapshot(dashboard: dashboard))
       }
     } catch {
-      lastError = error.localizedDescription
+      handle(error)
       await updatePendingCount()
     }
+  }
+
+  func refreshDeadLetters() async {
+    guard let captureQueue else {
+      deadLetterCaptureCount = 0
+      deadLetters = []
+      return
+    }
+    do {
+      deadLetters = try await captureQueue.deadLetters(limit: 100)
+      deadLetterCaptureCount = try await captureQueue.deadLetterCount()
+    } catch {
+      handle(error)
+    }
+  }
+
+  func restoreAllDeadLetters() async {
+    guard let captureQueue else {
+      lastError = "App Group 오프라인 큐를 사용할 수 없습니다."
+      return
+    }
+    do {
+      var previousCount = try await captureQueue.deadLetterCount()
+      while previousCount > 0 {
+        let page = try await captureQueue.deadLetters(limit: 100)
+        guard !page.isEmpty else {
+          throw ActionHubAPIError.encoding("dead-letter 목록을 다시 읽을 수 없습니다")
+        }
+        for deadLetter in page {
+          try await captureQueue.restoreDeadLetter(clientCaptureId: deadLetter.id)
+        }
+        let currentCount = try await captureQueue.deadLetterCount()
+        guard currentCount < previousCount else {
+          throw ActionHubAPIError.encoding("dead-letter 복원이 진행되지 않았습니다")
+        }
+        previousCount = currentCount
+      }
+      lastError = nil
+    } catch {
+      handle(error)
+    }
+    // Restoring puts the captures back on the send queue -- without this, "모두 복원" looked
+    // like it worked (the dead-letter count dropped) but nothing was actually sent until the
+    // next unrelated sync.
+    await flushCaptures()
+    await refreshDeadLetters()
+  }
+
+  func purgeAllDeadLetters(confirmed: Bool) async {
+    guard confirmed else { return }
+    guard let captureQueue else {
+      lastError = "App Group 오프라인 큐를 사용할 수 없습니다."
+      return
+    }
+    do {
+      var previousCount = try await captureQueue.deadLetterCount()
+      while previousCount > 0 {
+        let page = try await captureQueue.deadLetters(limit: 100)
+        guard !page.isEmpty else {
+          throw ActionHubAPIError.encoding("dead-letter 목록을 다시 읽을 수 없습니다")
+        }
+        for deadLetter in page {
+          try await captureQueue.purgeDeadLetter(clientCaptureId: deadLetter.id)
+        }
+        let currentCount = try await captureQueue.deadLetterCount()
+        guard currentCount < previousCount else {
+          throw ActionHubAPIError.encoding("dead-letter 삭제가 진행되지 않았습니다")
+        }
+        previousCount = currentCount
+      }
+      lastError = nil
+    } catch {
+      handle(error)
+    }
+    await updatePendingCount()
+    await refreshDeadLetters()
   }
 
   func loadPlan(_ id: String) async throws -> ActionPlan {
@@ -227,15 +311,27 @@ final class AppModel: ObservableObject {
   {
     let updated = try await session.updateItem(planId: planId, itemId: itemId, patch: patch)
     replacePlan(updated)
+    // Every other action (approve/reject/execute/classify/...) refreshes derived state
+    // (badges, list filters) after mutating. This one didn't, so turning off "계속 검토
+    // 필요" and saving left the review badge and list showing the stale count.
+    await refreshAll()
     return updated
   }
 
-  func approve(plan: ActionPlan, itemIds: [String]? = nil) async throws -> ActionPlan {
+  /// `forceReviewItems` defaults to `false` -- the server's structural review gate (e.g. a
+  /// calendar item with no start time) exists to stop exactly the kind of silent-failure
+  /// approval that shipped before this fix. When the server leaves items blocked
+  /// (`blockedItemIds` non-empty on the returned plan), the caller is responsible for showing
+  /// the block reason to the user and only retrying with `forceReviewItems: true` after an
+  /// explicit user choice -- see PlanDetailView.
+  func approve(plan: ActionPlan, itemIds: [String]? = nil, forceReviewItems: Bool = false)
+    async throws -> ActionPlan
+  {
     let updated = try await session.approve(
       planId: plan.id,
       request: PlanApprovalRequest(
         itemIds: itemIds,
-        forceReviewItems: true,
+        forceReviewItems: forceReviewItems,
         expectedPlanRevision: plan.revision
       )
     )
@@ -381,6 +477,7 @@ final class AppModel: ObservableObject {
     do {
       _ = try await session.registerPushToken(token, environment: AppConfiguration.pushEnvironment)
     } catch {
+      guard !Self.isCancellation(error) else { return }
       lastError = "푸시 토큰 등록 실패: \(error.localizedDescription)"
     }
   }
@@ -426,20 +523,6 @@ final class AppModel: ObservableObject {
     }
   }
 
-  private func synchronizeChanges() async throws {
-    var cursor = appGroupStore?.readSyncCursor()
-    var pageCount = 0
-    repeat {
-      let response = try await session.changes(cursor: cursor, limit: 200)
-      cursor = response.nextCursor
-      try appGroupStore?.writeSyncCursor(cursor)
-      pageCount += 1
-      if !response.hasMore { break }
-      // Bound a single foreground refresh so a very old device cannot monopolize the UI.
-      // The next refresh resumes from the durable cursor.
-    } while pageCount < 10
-  }
-
   private func replacePlan(_ plan: ActionPlan) {
     if let index = reviewPlans.firstIndex(where: { $0.id == plan.id }) {
       reviewPlans[index] = plan
@@ -451,16 +534,37 @@ final class AppModel: ObservableObject {
   private func updatePendingCount() async {
     guard let captureQueue else {
       pendingCaptureCount = 0
+      deadLetterCaptureCount = 0
+      deadLetters = []
       return
     }
     pendingCaptureCount = (try? await captureQueue.count()) ?? 0
+    deadLetterCaptureCount = (try? await captureQueue.deadLetterCount()) ?? 0
+    deadLetters = (try? await captureQueue.deadLetters(limit: 100)) ?? []
   }
 
-  private func handle(_ error: Error) {
+  /// Not private: Views that catch their own errors (PlanDetailView, DayCloseView,
+  /// SettingsView, ...) route through this too, so the cancellation filter below actually
+  /// applies everywhere instead of only to the call sites inside AppModel itself.
+  func handle(_ error: Error) {
     if case ActionHubAPIError.revoked = error {
       connectionState = .disconnected
     }
+    // A cancelled request is the result of the user or the system abandoning the work, not a
+    // failure worth reporting; showing it reads as "네트워크 오류: cancelled".
+    if Self.isCancellation(error) { return }
     lastError = error.localizedDescription
+  }
+
+  /// `HTTPTransport` now surfaces cancellation as `ActionHubAPIError.cancelled` (see
+  /// HTTPTransport.swift), but structured-concurrency cancellation can still reach a caller
+  /// directly as `CancellationError` without ever going through the transport, so both are
+  /// checked here.
+  static func isCancellation(_ error: Error) -> Bool {
+    if error is CancellationError { return true }
+    if case ActionHubAPIError.cancelled = error { return true }
+    if let urlError = error as? URLError, urlError.code == .cancelled { return true }
+    return false
   }
 
   private static var hardwareModel: String {

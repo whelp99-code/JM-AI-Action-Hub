@@ -58,9 +58,11 @@ Nginx 예시는 `deploy/nginx/action-hub.conf`에 포함한다.
 SQLite:
 
 ```bash
-./scripts/backup.sh
-./scripts/restore.sh backups/action-hub-YYYYmmdd-HHMMSS.tar.gz
+./scripts/backup.sh --source-data "$(pwd)/data" --output "$(pwd)/backups/action-hub.tar.gz"
+./scripts/restore.sh --archive "$(pwd)/backups/action-hub.tar.gz" --target-data "$(pwd)/data"
 ```
+
+백업/복구 경로는 절대 경로만 허용한다. 명시적 backup output은 새 경로여야 하며 기존 regular file·symlink·hardlink는 쓰기 전에 exit 64로 거부한다. 명시적 backup source/output 및 restore archive/target의 ancestor symlink도 caller-writable parent이면 거부한다(단, root가 관리하는 macOS `/var` system alias는 허용). 백업은 data-only이며 `.env`를 포함하지 않고, 복구는 절대/상위 경로, symlink·hardlink·device·FIFO·비정규 archive member를 target 변경 전에 exit 64로 거부한다. 복구는 sibling staging과 pre-restore snapshot을 사용한 뒤 `action-hub check`를 수행하므로, 검증 또는 check 실패 시 기존 target을 유지·복구한다. 기존 `./scripts/backup.sh` no-argument 호출은 충돌 없는 새 archive name으로 `data`를 repository `backups`에 보관하는 upgrade 호환 경로다.
 
 운영 백업 정책:
 

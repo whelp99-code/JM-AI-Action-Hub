@@ -3,7 +3,7 @@ import UIKit
 import UserNotifications
 
 @MainActor
-final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
+final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDelegate {
   static let shared = NotificationManager()
   weak var model: AppModel?
 
@@ -17,6 +17,17 @@ final class NotificationManager: NSObject, UNUserNotificationCenterDelegate {
       granted, _ in
       guard granted else { return }
       DispatchQueue.main.async { UIApplication.shared.registerForRemoteNotifications() }
+    }
+  }
+
+  /// `requestAuthorization` silently no-ops once the user has already denied the system
+  /// prompt -- iOS only asks once. Callers use this to detect that case and offer a path to
+  /// Settings instead of a button that visibly does nothing.
+  func currentAuthorizationStatus() async -> UNAuthorizationStatus {
+    await withCheckedContinuation { continuation in
+      UNUserNotificationCenter.current().getNotificationSettings { settings in
+        continuation.resume(returning: settings.authorizationStatus)
+      }
     }
   }
 

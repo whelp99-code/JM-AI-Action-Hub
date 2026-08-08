@@ -1,7 +1,7 @@
 # JM-AI Action Hub Mobile 보안·운영 가이드
 
-- 대상: Server `0.8.0`, iOS `0.1.0`
-- 작성일: 2026-07-31
+- 대상: Server `0.9.0`, native iOS `0.2.1`
+- 작성일: 2026-08-03
 
 ## 1. 보호 대상
 
@@ -64,12 +64,20 @@ action-hub check --json
 
 `production_ready=false`이면 운영 트래픽을 받지 않는다.
 
+### unsigned webhook 플래그
+
+`ACTION_HUB_ALLOW_UNSIGNED_WEBHOOKS=false`가 기본값이다. Provider signing secret이 없는 수신을 허용해야 한다면 development/test에서만 명시적으로 `true`를 설정한다. production은 플래그 값과 무관하게 unsigned webhook을 거부하며, 이미 queue에 든 unsigned delivery도 처리 직전에 현재 정책을 다시 검사한다.
+
 ## 5. Secret 관리
 
 - `.env`를 Git에 Commit하지 않는다.
 - APNs `.p8`는 저장소·ZIP·iPhone에 포함하지 않는다.
 - Container에서는 Read-only Secret Mount를 사용한다.
 - API Key와 Mobile Token Secret을 분리한다.
+- Mobile Token Secret은 API Key와 다른 32자 이상 고엔트로피 값이어야 한다. 같은 값이면 모바일 인증은 차단된다.
+- Development에서 Mobile Token Secret이 비어 있고 안전한 API Key만 있으면, 서버는 versioned HKDF-SHA256으로 domain-separated 32-byte 모바일 서명 키를 파생한다. API Key 원문은 모바일 서명 키로 사용하지 않는다.
+- HKDF fallback을 사용한 상태에서 API Key 또는 Mobile Token Secret을 바꾸면 기존 Access/Refresh Token은 무효가 될 수 있으므로 모든 기기를 재페어링한다. Production에서는 항상 독립된 Mobile Token Secret을 설정한다.
+- Mobile Token Secret이 누락되었거나 template placeholder이거나 API Key와 같으면 Claim, Refresh, Bearer API 모두 credential 검사 전에 503으로 차단되며 기기·토큰 상태는 변경하지 않는다.
 - Provider Token에는 대상 Repository/Calendar 등 최소 권한만 부여한다.
 - 로그에 Authorization, Refresh Token, Pairing Code, APNs Token 평문을 기록하지 않는다.
 
@@ -153,14 +161,26 @@ action-hub mobile-revoke <device_id>
 | 401 비율 급증 | Medium |
 | DB Migration 불일치 | 배포 차단 |
 
-## 10. Backup과 Migration
+## 10. iOS dead-letter 운영
+
+iOS App Group queue는 `captures/` 아래 pending, dead-letter, corrupt record를 분리한다. 서버 `failed` receipt가 같은 Capture에 5회 누적될 때만 dead-letter가 생성되며, network/transport 예외는 attempt count를 증가시키지 않는다.
+
+복구 절차:
+
+1. iOS Settings > 오프라인 수집 진단에서 Dead Letter 건수와 오류를 확인한다.
+2. `모두 복원`을 실행하면 각 record가 retry metadata 없이 pending으로 돌아간다. pending에 같은 client capture ID가 있으면 해당 복원은 중단되므로 원인을 먼저 확인한다.
+3. 원문 보존 필요성을 확인한 뒤에만 `모두 삭제`를 선택하고, 표시되는 복구 불가 확인 대화상자를 승인한다. 자동 purge는 없다.
+
+이 절차는 기기 내 queue의 수동 조치다. 서버의 capture API 또는 DB를 직접 삭제해 dead-letter를 해결하지 않는다.
+
+## 11. Backup과 Migration
 
 ```bash
 ./scripts/backup.sh
 ./scripts/upgrade.sh
 ```
 
-v0.8.0 Migration 전후 필수 확인:
+v0.9.0 배포 또는 migration 전후 필수 확인:
 
 ```text
 inbox_entries count 동일
@@ -173,7 +193,7 @@ mobile_* / push_notifications 신규 테이블 존재
 
 Rollback이 필요하면 DB와 소스를 함께 Backup 시점으로 복구한다. Schema만 Downgrade하고 v0.8 앱을 계속 실행하지 않는다.
 
-## 11. Incident Response
+## 12. Incident Response
 
 ### Refresh Reuse
 
@@ -197,7 +217,7 @@ Rollback이 필요하면 DB와 소스를 함께 Backup 시점으로 복구한다
 3. Backup과 로그 보존 정책에 따라 삭제·통지 판단
 4. Push Payload에 원문이 포함되지 않았는지 확인
 
-## 12. 현재 보안 경계
+## 13. 현재 보안·검증 경계
 
 구현 완료:
 
@@ -208,6 +228,8 @@ Rollback이 필요하면 DB와 소스를 함께 Backup 시점으로 복구한다
 - Revision Conflict
 - Generic APNs Payload
 - Keychain/App Group Protection 정책
+- iOS dead-letter 수동 복구·확정 삭제 UI
+- iOS full refresh 경로 (server Delta API는 호환성 유지)
 
 운영자가 추가해야 하는 것:
 
@@ -217,3 +239,6 @@ Rollback이 필요하면 DB와 소스를 함께 Backup 시점으로 복구한다
 - PostgreSQL 암호화·Backup
 - 실제 Apple Signing/Provisioning
 - 실제 Device MDM/Passcode 정책(팀 배포 시)
+- Full Xcode XCTest, App Target/Extension build, simulator/실기기 Share Sheet·Widget·APNs·background refresh 인수
+
+현재 iOS-XCTEST는 Full Xcode 필요 상태다. 서버 코드·문서 gate 또는 iOS 정적 검증만으로 device/build 인수가 완료됐다고 주장하지 않는다.

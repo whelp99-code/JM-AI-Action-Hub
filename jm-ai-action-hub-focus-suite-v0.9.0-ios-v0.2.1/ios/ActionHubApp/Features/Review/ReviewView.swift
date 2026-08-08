@@ -7,20 +7,25 @@ struct ReviewView: View {
   var body: some View {
     Group {
       if model.reviewPlans.isEmpty {
-        ContentUnavailableView {
-          Label("검토 대기 없음", systemImage: "checkmark.circle")
-        } description: {
-          Text("공유하거나 입력한 내용의 분석 결과가 여기에 표시됩니다.")
-        } actions: {
-          Button("빠른 입력") { model.isCapturePresented = true }
+        // Wrapped in a ScrollView so `.refreshable` below has something to attach a pull
+        // gesture to -- ContentUnavailableView alone isn't scrollable and previously left the
+        // empty state with no way to refresh except the badge count changing on its own.
+        ScrollView {
+          ContentUnavailableView {
+            Label("검토 대기 없음", systemImage: "checkmark.circle")
+          } description: {
+            Text("공유하거나 입력한 내용의 분석 결과가 여기에 표시됩니다.")
+          } actions: {
+            Button("빠른 입력") { model.isCapturePresented = true }
+          }
         }
       } else {
         List(model.reviewPlans) { plan in
           NavigationLink(value: plan.id) { ReviewPlanRow(plan: plan) }
         }
-        .refreshable { await model.refreshAll() }
       }
     }
+    .refreshable { await model.refreshAllDetached() }
     .navigationTitle("검토")
     .onChange(of: model.presentedPlanId) { _, planId in
       // Deep links select this tab; the user can open the highlighted plan from the list.

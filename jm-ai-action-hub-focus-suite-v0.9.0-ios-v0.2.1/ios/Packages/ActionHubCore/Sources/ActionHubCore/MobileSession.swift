@@ -28,9 +28,13 @@ public actor MobileSession {
   private var stored: StoredMobileSession?
   private var refreshTask: Task<StoredMobileSession, Error>?
 
-  public init(store: any CredentialStore, transport: any HTTPTransport = URLSessionTransport()) {
+  public init(
+    store: any CredentialStore,
+    transport: (any HTTPTransport)? = nil,
+    appVersion: String? = nil
+  ) {
     self.store = store
-    self.transport = transport
+    self.transport = transport ?? URLSessionTransport(appVersion: appVersion)
   }
 
   public var isConnected: Bool { stored != nil }
@@ -127,6 +131,25 @@ public actor MobileSession {
       throw ActionHubAPIError.updateRequired(minimumVersion: value.minimumIosAppVersion)
     }
     return value
+  }
+
+  public func refreshSnapshot(currentAppVersion: String? = nil) async throws -> MobileRefreshSnapshot {
+    async let dashboardRequest = dashboard(currentAppVersion: currentAppVersion)
+    async let reviewRequest = reviewPlans(limit: 50)
+    async let activityRequest = activity(limit: 50)
+    async let triageRequest = focusTriage(limit: 100)
+    async let matrixRequest = focusMatrix(limitPerQuadrant: 100)
+    async let big3Request = big3()
+    async let activeFocusRequest = activeFocusSession()
+    return try await MobileRefreshSnapshot(
+      dashboard: dashboardRequest,
+      review: reviewRequest,
+      activity: activityRequest,
+      triage: triageRequest,
+      matrix: matrixRequest,
+      big3: big3Request,
+      activeFocus: activeFocusRequest
+    )
   }
 
   public func reviewPlans(limit: Int = 50) async throws -> [ActionPlan] {

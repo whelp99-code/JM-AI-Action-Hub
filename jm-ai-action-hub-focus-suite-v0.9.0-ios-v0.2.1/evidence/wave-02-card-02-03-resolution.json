@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-02T19:15:05Z",
+  "repositoryHead": "9c8f28d5a9eb34a2c30a869be620885023171977",
+  "card": "CARD-02-03",
+  "decision": "UNBLOCKED",
+  "approvedScopeExpansion": {
+    "file": "server/.env.example",
+    "exactLine": "ACTION_HUB_MOBILE_RECOMMENDED_IOS_APP_VERSION=0.2.1"
+  },
+  "archivePolicy": {
+    "LICENSE": "include_if_present_else_skip",
+    "NOTICE": "include_if_present_else_skip",
+    "traceability": "LICENSE/NOTICE 부재 — 소유자 제공 대기",
+    "legalTextCreationAuthorized": false
+  },
+  "preservedConstraints": {
+    "exactEnvKeySet": true,
+    "exactThreeEntryCredentialMap": true,
+    "allOtherCredentialValuesEmpty": true,
+    "urlUserinfoForbidden": true,
+    "forbiddenPathsExcluded": true,
+    "symlinksExcluded": true,
+    "deterministicArchive": true,
+    "iOSXCTest": "PENDING_FULL_XCODE"
+  },
+  "prohibitedActions": [
+    "commit",
+    "stage",
+    "push",
+    "pull_request",
+    "merge",
+    "deployment",
+    "xcode_install",
+    "ios_device_signing"
+  ]
+}

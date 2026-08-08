@@ -92,7 +92,7 @@ class DualBig3Request(BaseModel):
     actor: str = Field(default="user", max_length=100)
 
     @model_validator(mode="after")
-    def unique_items(self) -> "DualBig3Request":
+    def unique_items(self) -> DualBig3Request:
         combined = self.human_item_ids + self.ai_item_ids
         if len(combined) != len(set(combined)):
             raise ValueError("The same action cannot be committed to both Human and AI Big3")
@@ -202,11 +202,45 @@ class DayCloseDecisionInput(BaseModel):
     follow_up_at: datetime | None = None
     executor: ExecutorType | None = None
 
+    @model_validator(mode="after")
+    def validate_decision_fields(self) -> DayCloseDecisionInput:
+        forbidden_by_decision = {
+            "reschedule": ("waiting_for", "follow_up_at", "executor"),
+            "split": ("to_date", "waiting_for", "follow_up_at", "executor"),
+            "delegate": ("to_date", "waiting_for", "follow_up_at"),
+            "deadline_change": ("waiting_for", "follow_up_at", "executor"),
+            "cancel": ("to_date", "waiting_for", "follow_up_at", "executor"),
+            "waiting": ("to_date", "executor"),
+        }
+        for field_name in forbidden_by_decision[self.decision]:
+            if getattr(self, field_name) is not None:
+                raise ValueError(f"{field_name} is forbidden for {self.decision}")
+
+        if self.decision == "deadline_change" and self.to_date is None:
+            raise ValueError("deadline_change requires to_date")
+        if self.decision == "waiting":
+            if not self.waiting_for or not self.waiting_for.strip():
+                raise ValueError("waiting requires nonblank waiting_for")
+            if self.follow_up_at is None:
+                raise ValueError("waiting requires follow_up_at")
+            if self.follow_up_at.tzinfo is None or self.follow_up_at.utcoffset() is None:
+                raise ValueError("waiting follow_up_at must be timezone-aware")
+        return self
+
 
 class DayCloseRequest(BaseModel):
     target_date: date | None = None
     decisions: list[DayCloseDecisionInput] = Field(min_length=1, max_length=100)
     actor: str = Field(default="user", max_length=100)
+
+    @model_validator(mode="after")
+    def unique_action_item_ids(self) -> DayCloseRequest:
+        seen: set[str] = set()
+        for decision in self.decisions:
+            if decision.action_item_id in seen:
+                raise ValueError(f"duplicate action_item_id: {decision.action_item_id}")
+            seen.add(decision.action_item_id)
+        return self
 
 
 class CarryOverDecisionRead(BaseModel):

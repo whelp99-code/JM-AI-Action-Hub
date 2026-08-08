@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
-from ..models import ActionItem, ItemState, MobileDevice, PushNotification
+from ..models import MobileDevice, PushNotification
 from ..schemas import (
     ActionItemUpdate,
     ExecutionSummary,
@@ -31,7 +31,7 @@ from ..schemas import (
     PlanRead,
 )
 from ..security import require_api_key, require_mobile_scope
-from ..services.executor import approve_plan, execute_plan, reject_items, update_item
+from ..services.executor import approve_plan, build_execution_summary, execute_plan, reject_items, update_item
 from ..services.mobile import (
     build_mobile_dashboard,
     capabilities,
@@ -72,6 +72,7 @@ def _auth_error(exc: MobileAuthError) -> HTTPException:
         "pairing_unavailable": status.HTTP_409_CONFLICT,
         "mobile_disabled": status.HTTP_503_SERVICE_UNAVAILABLE,
         "mobile_auth_not_configured": status.HTTP_503_SERVICE_UNAVAILABLE,
+        "mobile_secret_reuses_admin_key": status.HTTP_503_SERVICE_UNAVAILABLE,
     }
     return HTTPException(status_code=mapping.get(exc.code, status.HTTP_401_UNAUTHORIZED), detail=str(exc))
 
@@ -94,36 +95,6 @@ def _check_plan_revision(plan, expected: int | None) -> None:
                 "current_revision": plan.revision,
             },
         )
-
-
-def _execution_summary(plan) -> ExecutionSummary:
-    action_completed = sum(item.state == ItemState.COMPLETED.value for item in plan.items)
-    registered_states = {
-        ItemState.REGISTERED.value,
-        ItemState.WAITING.value,
-        ItemState.DISPATCHED.value,
-        ItemState.RUNNING.value,
-        ItemState.NEEDS_INPUT.value,
-        ItemState.HUMAN_REVIEW.value,
-    }
-    registered = sum(item.state in registered_states for item in plan.items)
-    queued = sum(item.state in {ItemState.QUEUED.value, ItemState.EXECUTING.value} for item in plan.items)
-    failed = sum(item.state == ItemState.FAILED.value for item in plan.items)
-    duplicate = sum(item.state == ItemState.SKIPPED_DUPLICATE.value for item in plan.items)
-    rejected = sum(item.state == ItemState.REJECTED.value for item in plan.items)
-    pending = len(plan.items) - action_completed - registered - queued - failed - duplicate - rejected
-    return ExecutionSummary(
-        plan_id=plan.id,
-        plan_status=plan.status,
-        completed=registered + action_completed,
-        registered=registered,
-        action_completed=action_completed,
-        queued=queued,
-        failed=failed,
-        skipped_duplicate=duplicate,
-        pending=max(0, pending),
-        items=plan.items,
-    )
 
 
 @mobile_public_router.get(
@@ -433,7 +404,7 @@ def execute_mobile_plan(
         retry_failed=payload.retry_failed,
         drain_inline=payload.drain_inline,
     )
-    return _execution_summary(plan)
+    return build_execution_summary(db, plan)
 
 
 @mobile_router.patch(

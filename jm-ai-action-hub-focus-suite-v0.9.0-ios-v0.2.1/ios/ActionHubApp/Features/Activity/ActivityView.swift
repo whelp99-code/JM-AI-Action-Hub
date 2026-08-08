@@ -9,9 +9,13 @@ struct ActivityView: View {
   var body: some View {
     Group {
       if filtered.isEmpty {
-        ContentUnavailableView(
-          "활동 없음", systemImage: "waveform.path.ecg",
-          description: Text("AI 실행, Follow-up, 등록 실패와 완료 이력이 표시됩니다."))
+        // See ReviewView: `.refreshable` needs a scrollable container, and the activity tab had
+        // no refresh affordance at all when empty (no toolbar button either).
+        ScrollView {
+          ContentUnavailableView(
+            "활동 없음", systemImage: "waveform.path.ecg",
+            description: Text("AI 실행, Follow-up, 등록 실패와 완료 이력이 표시됩니다."))
+        }
       } else {
         List(filtered) { item in
           Button {
@@ -40,9 +44,9 @@ struct ActivityView: View {
           }
           .buttonStyle(.plain)
         }
-        .refreshable { await model.refreshAll() }
       }
     }
+    .refreshable { await model.refreshAllDetached() }
     .navigationTitle("활동")
     .toolbar {
       ToolbarItem(placement: .topBarTrailing) {

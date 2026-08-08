@@ -17,6 +17,8 @@ from action_hub.database import Database
 from action_hub.main import create_app
 from action_hub.models import ActionItem, MeetingIntake, OutboxEvent, WebhookDelivery, WorkerExecution, utcnow
 
+TEST_API_KEY = "test-api-key-" + ("x" * 32)
+
 
 def _create(client: TestClient, text_value: str) -> dict:
     response = client.post(
@@ -62,6 +64,7 @@ def test_pre_alembic_v010_database_is_stamped_and_upgraded(tmp_path):
 def test_stale_outbox_lock_is_recovered_by_control_loop(tmp_path):
     settings = Settings(
         app_env="test",
+        api_key=TEST_API_KEY,
         database_url=f"sqlite+pysqlite:///{tmp_path / 'outbox.db'}",
         data_dir=tmp_path,
         execution_mode="dry_run",
@@ -70,6 +73,7 @@ def test_stale_outbox_lock_is_recovered_by_control_loop(tmp_path):
     )
     app = create_app(settings)
     with TestClient(app) as client:
+        client.headers["X-Action-Hub-Key"] = settings.api_key
         plan = _create(client, "내일 오후 3시까지 제안서 작성")
         _approve(client, plan["id"])
         queued = client.post(f"/api/v1/plans/{plan['id']}/execute", json={}).json()
@@ -89,6 +93,7 @@ def test_stale_webhook_lock_is_recovered_and_applied(tmp_path):
     secret = "github-hook-secret"
     settings = Settings(
         app_env="test",
+        api_key=TEST_API_KEY,
         database_url=f"sqlite+pysqlite:///{tmp_path / 'webhook.db'}",
         data_dir=tmp_path,
         execution_mode="dry_run",
@@ -99,6 +104,7 @@ def test_stale_webhook_lock_is_recovered_and_applied(tmp_path):
     )
     app = create_app(settings)
     with TestClient(app) as client:
+        client.headers["X-Action-Hub-Key"] = settings.api_key
         plan = _create(client, "repo:owner/repo 로그인 오류 수정")
         _approve(client, plan["id"])
         client.post(f"/api/v1/plans/{plan['id']}/execute", json={})
@@ -168,6 +174,7 @@ def test_google_calendar_retries_unauthorized_with_refreshed_token(settings):
     })
     app = create_app(settings)
     with TestClient(app) as client:
+        client.headers["X-Action-Hub-Key"] = settings.api_key
         plan = _create(client, "내일 오전 10시 고객 미팅")
         with app.state.database.session_factory() as db:
             item = db.get(ActionItem, plan["items"][0]["id"])
@@ -191,6 +198,7 @@ def test_github_workflow_and_pull_request_close_the_ai_loop(tmp_path):
     secret = "github-secret"
     settings = Settings(
         app_env="test",
+        api_key=TEST_API_KEY,
         database_url=f"sqlite+pysqlite:///{tmp_path / 'worker-hooks.db'}",
         data_dir=tmp_path,
         execution_mode="dry_run",
@@ -199,6 +207,7 @@ def test_github_workflow_and_pull_request_close_the_ai_loop(tmp_path):
     )
     app = create_app(settings)
     with TestClient(app) as client:
+        client.headers["X-Action-Hub-Key"] = settings.api_key
         plan = _create(client, "repo:owner/repo 로그인 오류를 codex로 수정")
         item = plan["items"][0]
         client.patch(
@@ -354,6 +363,34 @@ def test_control_and_error_endpoints_are_safe(client):
     assert client.post("/api/v1/webhooks/unknown", content=b"{}").status_code == 422
 
 
+def test_concurrent_update_conflict_is_reported_as_409_not_500(client, monkeypatch):
+    # Regression for S9: ActionPlan/ActionItem/FocusSession all use
+    # version_id_col=revision for optimistic locking (models.py), but there was
+    # no StaleDataError handling anywhere in the codebase, so a genuine write
+    # race between two overlapping requests fell through to the catch-all
+    # Exception handler and came back as an unhelpful 500. Forcing the service
+    # call to raise StaleDataError isolates the exception-mapping behavior
+    # (main.py's dedicated handler) from the harder problem of deterministically
+    # reproducing a real concurrent write race in a single-threaded test.
+    from sqlalchemy.orm.exc import StaleDataError
+
+    import action_hub.api.routes as routes_module
+
+    def _raise_stale(*args, **kwargs):
+        raise StaleDataError("UPDATE statement matched 0 rows")
+
+    monkeypatch.setattr(routes_module, "update_item", _raise_stale)
+
+    response = client.patch(
+        "/api/v1/plans/plan-does-not-matter/items/item-does-not-matter",
+        json={"title": "x"},
+    )
+    assert response.status_code == 409, response.text
+    detail = response.json()["detail"]
+    assert detail["code"] == "concurrent_update"
+    assert detail["message"]
+
+
 def test_connector_health_probe_in_dry_run(client):
     response = client.get("/api/v1/connectors/status?probe=true")
     assert response.status_code == 200
@@ -373,6 +410,7 @@ def test_check_suite_updates_worker_without_downgrading_merged_action(tmp_path):
     secret = "github-check-secret"
     settings = Settings(
         app_env="test",
+        api_key=TEST_API_KEY,
         database_url=f"sqlite+pysqlite:///{tmp_path / 'checks.db'}",
         data_dir=tmp_path,
         execution_mode="dry_run",
@@ -381,6 +419,7 @@ def test_check_suite_updates_worker_without_downgrading_merged_action(tmp_path):
     )
     app = create_app(settings)
     with TestClient(app) as client:
+        client.headers["X-Action-Hub-Key"] = settings.api_key
         plan = _create(client, "repo:owner/repo 로그인 오류를 codex로 수정")
         item = plan["items"][0]
         client.patch(

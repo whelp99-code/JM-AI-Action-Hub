@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-02T20:23:53Z",
+  "wave": "02",
+  "status": "DONE_LOCAL_PASS",
+  "repositoryHead": "9c8f28d5a9eb34a2c30a869be620885023171977",
+  "deliveryState": "UNCOMMITTED_WORKTREE",
+  "cards": {
+    "CARD-02-01": "LOCAL_PASS",
+    "CARD-02-02": "DONE",
+    "CARD-02-03": "DONE",
+    "CARD-02-04-remainder": "DONE_LOCAL_PASS"
+  },
+  "orchestration": {
+    "runId": "run_4efa4f962b2c",
+    "revisionTaskId": "task_27be9217c61c",
+    "revisionDispatchId": "ctx_2b028326d1ca",
+    "implementationModel": "gpt-5.6-terra",
+    "independentReviewer": "gpt-5.6-sol"
+  },
+  "revisionLoop": {
+    "initialReview": "evidence/lunamax-wave02-final-review.md",
+    "initialVerdict": "FAIL",
+    "initialSeverity": {"critical": 0, "high": 1, "medium": 1, "low": 2},
+    "previousHigh": "CLOSED",
+    "previousMedium": "CLOSED",
+    "previousLow": "CLOSED",
+    "revisionReport": "evidence/wave-02-revision-report.md"
+  },
+  "solVerification": {
+    "sourceReleaseFocused": {"status": "PASS", "exitCode": 0, "summary": "44 passed"},
+    "makeVerify": {"status": "PASS", "exitCode": 0, "summary": "153 passed", "coveragePercent": 83.07},
+    "iosStatic": {"status": "PASS", "exitCode": 0, "summary": "IOS_PROJECT_STATIC_OK sources=30"},
+    "actionHubCoreBuild": {"status": "PASS", "exitCode": 0},
+    "archiveBuild": {"status": "PASS", "exitCode": 0},
+    "archiveVerify": {"status": "PASS", "exitCode": 0, "forbiddenCount": 0, "version": "0.9.0"},
+    "archiveCoverageArtifactScan": {"status": "PASS", "exitCode": 0, "matchCount": 0},
+    "archiveSha256": "b9596c2b7cd1825395df982ca04e98394f1346616289661e99a82cd4a12e409d",
+    "archiveTempPath": "/var/folders/f0/tbqwy3mn7rj7vy2j7ts0gxhr0000gn/T/tmp.oRsMrqIeeM",
+    "httpTransportXCTest": {"status": "BLOCKED", "exitCode": 1, "reason": "no such module XCTest"},
+    "gitDiffCheck": {"status": "PASS", "exitCode": 0}
+  },
+  "lunaMax": {
+    "model": "gpt-5.6-luna",
+    "reasoningEffort": "max",
+    "sessionId": "019fc41a-c00a-7c93-a597-1a57f4d2b028",
+    "processExitCode": 0,
+    "verdict": "PASS",
+    "severity": {"critical": 0, "high": 0, "medium": 0, "low": 0},
+    "report": "evidence/lunamax-wave02-final-r2-review.md",
+    "verification": {
+      "ruff": {"status": "PASS", "exitCode": 0},
+      "fullPytest": {"status": "PASS", "exitCode": 0, "summary": "153 passed"},
+      "makeVerify": {"status": "PASS", "exitCode": 0, "coveragePercent": 83.17},
+      "docsCheck": {"status": "PASS", "exitCode": 0, "summary": "stale_count=0 required_count=6"},
+      "securityMobileFocused": {"status": "PASS", "exitCode": 0},
+      "sourceReleaseFocused": {"status": "PASS", "exitCode": 0, "summary": "44 passed"},
+      "iosStatic": {"status": "PASS", "exitCode": 0},
+      "actionHubCoreBuild": {"status": "PASS", "exitCode": 0},
+      "offlineMultiprocess": {"status": "PASS", "exitCode": 0, "sentinel": "OFFLINE_QUEUE_MULTIPROCESS_OK"},
+      "httpTransportXCTest": {"status": "BLOCKED", "exitCode": 1, "reason": "no such module XCTest"},
+      "verifyRelease": {"status": "BLOCKED", "exitCode": 1, "reason": "no such module XCTest after Xcodeproj/OpenAPI/static PASS"},
+      "gitDiffCheck": {"status": "PASS", "exitCode": 0}
+    },
+    "archive": {
+      "buildFirstExitCode": 0,
+      "buildSecondExitCode": 0,
+      "shaCompareExitCode": 0,
+      "sha256First": "b9596c2b7cd1825395df982ca04e98394f1346616289661e99a82cd4a12e409d",
+      "sha256Second": "b9596c2b7cd1825395df982ca04e98394f1346616289661e99a82cd4a12e409d",
+      "verifyFirstExitCode": 0,
+      "verifySecondExitCode": 0,
+      "coverageArtifactScanFirst": 0,
+      "coverageArtifactScanSecond": 0,
+      "extractExitCode": 0,
+      "venvExitCode": 0,
+      "pipInstallExitCode": 0,
+      "migrateExitCode": 0,
+      "checkExitCode": 0,
+      "tempPath": "/var/folders/f0/tbqwy3mn7rj7vy2j7ts0gxhr0000gn/T/tmp.Y7mc1UGhDT",
+      "wrapperDiagnostic": "An auxiliary combined-exit echo had a non-fatal arithmetic syntax diagnostic; plain SHA equality and tar scans were rerun successfully."
+    }
+  },
+  "traceability": {
+    "legal": "LICENSE/NOTICE 부재 — 소유자 제공 대기",
+    "iosXCTest": "iOS-XCTEST PENDING (Full Xcode 필요)",
+    "deferredRerun": "Full Xcode environment",
+    "notRun": {"status": "NOT_RUN", "items": ["iOS device signing", "external provider live acceptance", "production deployment"]},
+    "failureState": {"status": "FAIL", "active": false, "note": "Initial LunaMax review failed and is retained; final revision verification passed."}
+  },
+  "prohibitedActionsObserved": {
+    "stage": false,
+    "commit": false,
+    "push": false,
+    "pullRequest": false,
+    "merge": false,
+    "deployment": false,
+    "xcodeInstall": false,
+    "iosDeviceSigning": false
+  }
+}

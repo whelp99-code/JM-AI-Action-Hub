@@ -10,7 +10,6 @@ from ..config import Settings
 from ..models import ActionItem, FollowUp, ItemState, utcnow
 from ..schemas import DecisionItem, DecisionPlan
 
-
 EXCLUDED_STATES = {
     ItemState.COMPLETED.value,
     ItemState.REJECTED.value,

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "wave": "02",
+  "card": "CARD-02-03",
+  "status": "PASS",
+  "implementationModel": "gpt-5.6-terra",
+  "independentReviewer": "gpt-5.6-sol",
+  "scope": {
+    "recommendedIosVersionTemplate": "ACTION_HUB_MOBILE_RECOMMENDED_IOS_APP_VERSION=0.2.1",
+    "legalPolicy": "include LICENSE or NOTICE only when owner-supplied files exist",
+    "legalTrace": "LICENSE/NOTICE 부재 — 소유자 제공 대기",
+    "credentialTypedExceptions": [
+      "ACTION_HUB_MOBILE_ACCESS_TOKEN_MINUTES",
+      "ACTION_HUB_MOBILE_REFRESH_TOKEN_DAYS",
+      "ACTION_HUB_GOOGLE_OAUTH_TOKEN_URL"
+    ]
+  },
+  "terra": {
+    "focusedPytest": {"exitCode": 0, "summary": "35 passed"},
+    "orderedBlock": {"exitCode": 0},
+    "sha256First": "d1862a2b5c112b7a939d889667e3c06d22cc96a73f88546c56006f535f24f005",
+    "sha256Second": "d1862a2b5c112b7a939d889667e3c06d22cc96a73f88546c56006f535f24f005",
+    "tempPath": "/var/folders/f0/tbqwy3mn7rj7vy2j7ts0gxhr0000gn/T/tmp.PV9sCC2ouF",
+    "gitDiffCheckExitCode": 0
+  },
+  "sol": {
+    "focusedPytest": {"exitCode": 0, "summary": "35 passed"},
+    "buildFirstExitCode": 0,
+    "buildSecondExitCode": 0,
+    "shaCompareExitCode": 0,
+    "verifyArchiveExitCode": 0,
+    "forbiddenCount": 0,
+    "version": "0.9.0",
+    "extractExitCode": 0,
+    "venvExitCode": 0,
+    "pipInstallExitCode": 0,
+    "migrateExitCode": 0,
+    "checkExitCode": 0,
+    "openapiValidatorExitCode": 0,
+    "iosStaticValidatorExitCode": 0,
+    "sha256First": "d1862a2b5c112b7a939d889667e3c06d22cc96a73f88546c56006f535f24f005",
+    "sha256Second": "d1862a2b5c112b7a939d889667e3c06d22cc96a73f88546c56006f535f24f005",
+    "tempPath": "/var/folders/f0/tbqwy3mn7rj7vy2j7ts0gxhr0000gn/T/tmp.5nGaQffuSM",
+    "gitDiffCheckExitCode": 0,
+    "verdict": "PASS"
+  },
+  "deferred": ["iOS-XCTEST PENDING (Full Xcode 필요)"],
+  "prohibitedActionsObserved": {
+    "commit": false,
+    "push": false,
+    "iosDeviceSigning": false
+  }
+}

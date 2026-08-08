@@ -9,8 +9,7 @@ from ..config import Settings
 from ..models import ActionItem, FollowUp, ItemState, utcnow
 from .audit import record_audit
 from .push import queue_push_for_active_devices
-from .state_sync import recalculate_plan_status
-
+from .state_sync import clear_needs_review, recalculate_plan_status
 
 ACTIVE_FOLLOWUP_STATES = {"waiting", "follow_up_due", "followed_up"}
 
@@ -189,6 +188,7 @@ def resolve_followup(
             item.state = ItemState.COMPLETED.value
             item.completed_at = now
             item.completion_evidence = note or "Follow-up resolved"
+            clear_needs_review(item)
     elif state == "cancelled":
         if item and item.state == ItemState.WAITING.value:
             item.state = ItemState.REGISTERED.value

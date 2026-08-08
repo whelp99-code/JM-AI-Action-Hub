@@ -9,20 +9,30 @@ from ..audit import record_audit
 from ..outbox import enqueue_event, process_outbox_batch
 from ..push import queue_push_for_active_devices
 from ..state_sync import recalculate_plan_status
+from .base import WorkerAdapter
 from .github_workflow import GitHubWorkflowWorker
+from .local_webhook import LocalWebhookWorker
 
 SUPPORTED_WORKERS = {"codex", "claude", "copilot", "orca", "hermes", "master-worker"}
 ACTIVE_EXECUTION_STATES = {"queued", "dispatched", "running", "needs_input", "human_review"}
+
+# Workers that may resolve to an adapter other than GitHubWorkflowWorker,
+# selected by the shape of their configured route (see local_webhook.py).
+LOCAL_ROUTABLE_WORKERS = {"master-worker"}
 
 
 class WorkerRegistry:
     def __init__(self, settings: Settings):
         self.settings = settings
 
-    def get(self, name: str) -> GitHubWorkflowWorker:
+    def get(self, name: str) -> WorkerAdapter:
         normalized = name.lower().strip()
         if normalized not in SUPPORTED_WORKERS and normalized not in self.settings.worker_routes:
             raise KeyError(f"Unsupported worker: {name}")
+        if normalized in LOCAL_ROUTABLE_WORKERS:
+            route = self.settings.worker_routes.get(normalized, {})
+            if isinstance(route, dict) and route.get("kind") == "local_webhook":
+                return LocalWebhookWorker(normalized, self.settings)
         return GitHubWorkflowWorker(normalized, self.settings)
 
     def statuses(self) -> list[dict]:

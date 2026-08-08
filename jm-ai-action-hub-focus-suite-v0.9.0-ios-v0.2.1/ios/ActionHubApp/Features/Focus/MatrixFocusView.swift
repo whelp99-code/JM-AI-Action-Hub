@@ -32,6 +32,7 @@ struct MatrixFocusView: View {
       }
       .padding()
     }
+    .refreshable { await model.refreshAllDetached() }
   }
 
   private func matrixCell(_ quadrant: Quadrant) -> some View {

@@ -1,18 +1,65 @@
+import ActionHubCore
 import AVFoundation
 import Foundation
 import Speech
+import UIKit
 
 @MainActor
 final class SpeechCaptureService: ObservableObject {
   @Published private(set) var isRecording = false
   @Published private(set) var transcript = ""
   @Published var errorMessage: String?
+  /// True when `errorMessage` (or the pre-flight hint below) means the user must go to
+  /// Settings.app to fix this -- the system permission prompt cannot resolve it anymore.
+  @Published private(set) var needsSettingsAction = false
+  /// Non-nil as soon as the view appears, before the user ever taps the button, when a
+  /// permission was already denied in a previous session. Lets the UI show the problem instead
+  /// of waiting for a tap that will silently no-op.
+  @Published private(set) var permissionHint: String?
 
   private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "ko-KR"))
   private let audioEngine = AVAudioEngine()
   private var request: SFSpeechAudioBufferRecognitionRequest?
   private var task: SFSpeechRecognitionTask?
   private var tapInstalled = false
+
+  init() {
+    refreshPermissionStatus()
+  }
+
+  /// Re-reads the current permission state without prompting. Call this from `onAppear` and
+  /// whenever the app returns from the foreground (e.g. after the user visits Settings.app),
+  /// since permission changes made there don't otherwise notify this object.
+  func refreshPermissionStatus() {
+    let (speech, microphone) = currentPermissionStatus()
+    permissionHint = SpeechPermissionCopy.blockingMessage(speech: speech, microphone: microphone)
+  }
+
+  func openSettings() {
+    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+    UIApplication.shared.open(url)
+  }
+
+  private func currentPermissionStatus() -> (
+    speech: SpeechPermissionStatus, microphone: SpeechPermissionStatus
+  ) {
+    let speech: SpeechPermissionStatus
+    switch SFSpeechRecognizer.authorizationStatus() {
+    case .notDetermined: speech = .notDetermined
+    case .authorized: speech = .authorized
+    case .denied: speech = .denied
+    case .restricted: speech = .restricted
+    @unknown default: speech = .denied
+    }
+    let microphone: SpeechPermissionStatus
+    switch AVAudioApplication.shared.recordPermission {
+    case .undetermined: microphone = .notDetermined
+    case .granted: microphone = .authorized
+    case .denied: microphone = .denied
+    @unknown default: microphone = .denied
+    }
+    return (speech, microphone)
+  }
 
   func requestAuthorization() async -> Bool {
     let speech = await withCheckedContinuation { continuation in
@@ -24,18 +71,49 @@ final class SpeechCaptureService: ObservableObject {
 
   func start() async {
     guard !isRecording else { return }
+    errorMessage = nil
+    needsSettingsAction = false
+
+    // A permission denied in a previous session never re-prompts -- `requestAuthorization()`
+    // below would just fail again with no UI. Catch that up front with copy that tells the user
+    // what to do, instead of a bare "permission required" message.
+    let (speechStatus, microphoneStatus) = currentPermissionStatus()
+    if let blocked = SpeechPermissionCopy.blockingMessage(
+      speech: speechStatus, microphone: microphoneStatus)
+    {
+      errorMessage = blocked
+      needsSettingsAction = SpeechPermissionCopy.needsSettingsAction(
+        speech: speechStatus, microphone: microphoneStatus)
+      permissionHint = blocked
+      return
+    }
+
     guard let recognizer, recognizer.isAvailable else {
       errorMessage = "현재 음성 인식 서비스를 사용할 수 없습니다."
       return
     }
+
     guard await requestAuthorization() else {
       errorMessage = "마이크와 음성 인식 권한이 필요합니다."
+      refreshPermissionStatus()
+      needsSettingsAction = permissionHint != nil
       return
     }
 
+    permissionHint = nil
+    await beginRecognition(recognizer: recognizer, preferOnDevice: true)
+  }
+
+  /// Runs one recognition attempt. On-device recognition is preferred for privacy, but
+  /// `SFSpeechRecognizer.supportsOnDeviceRecognition` only reports hardware/OS capability, not
+  /// whether the `ko-KR` on-device model is actually downloaded -- there is no public API to
+  /// check that ahead of time. If the on-device attempt errors out before producing a single
+  /// partial result (the signature of a missing/unavailable model, as opposed to a mid-stream
+  /// audio/network hiccup), we transparently retry once against the server-based recognizer
+  /// rather than leaving the user with a dead button.
+  private func beginRecognition(recognizer: SFSpeechRecognizer, preferOnDevice: Bool) async {
     stop()
     transcript = ""
-    errorMessage = nil
 
     do {
       let audioSession = AVAudioSession.sharedInstance()
@@ -44,7 +122,7 @@ final class SpeechCaptureService: ObservableObject {
 
       let request = SFSpeechAudioBufferRecognitionRequest()
       request.shouldReportPartialResults = true
-      if recognizer.supportsOnDeviceRecognition {
+      if preferOnDevice && recognizer.supportsOnDeviceRecognition {
         request.requiresOnDeviceRecognition = true
       }
       self.request = request
@@ -60,12 +138,18 @@ final class SpeechCaptureService: ObservableObject {
       isRecording = true
       task = recognizer.recognitionTask(with: request) { [weak self] result, error in
         Task { @MainActor in
-          if let result { self?.transcript = result.bestTranscription.formattedString }
+          guard let self else { return }
+          if let result { self.transcript = result.bestTranscription.formattedString }
           if let error {
-            self?.errorMessage = error.localizedDescription
-            self?.stop()
+            if preferOnDevice && self.transcript.isEmpty {
+              self.stop()
+              await self.beginRecognition(recognizer: recognizer, preferOnDevice: false)
+              return
+            }
+            self.errorMessage = error.localizedDescription
+            self.stop()
           } else if result?.isFinal == true {
-            self?.stop()
+            self.stop()
           }
         }
       }

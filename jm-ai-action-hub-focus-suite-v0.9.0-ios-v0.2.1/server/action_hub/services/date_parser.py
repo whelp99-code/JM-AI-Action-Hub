@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
-
 WEEKDAYS_KO = {
     "월": 0,
     "월요일": 0,
