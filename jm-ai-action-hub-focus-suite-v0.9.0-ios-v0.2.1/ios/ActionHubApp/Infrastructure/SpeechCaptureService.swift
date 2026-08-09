@@ -61,12 +61,18 @@ final class SpeechCaptureService: ObservableObject {
     return (speech, microphone)
   }
 
-  func requestAuthorization() async -> Bool {
-    let speech = await withCheckedContinuation { continuation in
-      SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0) }
+  /// `nonisolated` is load-bearing. `SFSpeechRecognizer.requestAuthorization` runs its completion
+  /// handler on an arbitrary background queue, but this type is `@MainActor`, so the handler
+  /// inherited main-actor isolation and Swift 6's executor check trapped the process the instant
+  /// it ran (`dispatch_assert_queue_fail`, SIGTRAP). The app disappeared to the home screen with
+  /// no error the first time anyone tapped 음성 입력. Resume with a `Bool` so no non-Sendable
+  /// value crosses the isolation boundary either.
+  nonisolated func requestAuthorization() async -> Bool {
+    let speech = await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+      SFSpeechRecognizer.requestAuthorization { continuation.resume(returning: $0 == .authorized) }
     }
     let microphone = await AVAudioApplication.requestRecordPermission()
-    return speech == .authorized && microphone
+    return speech && microphone
   }
 
   func start() async {

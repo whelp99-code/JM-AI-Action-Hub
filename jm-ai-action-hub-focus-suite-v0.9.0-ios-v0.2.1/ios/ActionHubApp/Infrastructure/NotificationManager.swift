@@ -23,8 +23,11 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
   /// `requestAuthorization` silently no-ops once the user has already denied the system
   /// prompt -- iOS only asks once. Callers use this to detect that case and offer a path to
   /// Settings instead of a button that visibly does nothing.
-  func currentAuthorizationStatus() async -> UNAuthorizationStatus {
-    await withCheckedContinuation { continuation in
+  /// `nonisolated` for the same reason as `SpeechCaptureService.requestAuthorization`:
+  /// `getNotificationSettings` calls back on a background queue, and a main-actor-isolated
+  /// completion handler traps under Swift 6 the moment it does.
+  nonisolated func currentAuthorizationStatus() async -> UNAuthorizationStatus {
+    await withCheckedContinuation { (continuation: CheckedContinuation<UNAuthorizationStatus, Never>) in
       UNUserNotificationCenter.current().getNotificationSettings { settings in
         continuation.resume(returning: settings.authorizationStatus)
       }

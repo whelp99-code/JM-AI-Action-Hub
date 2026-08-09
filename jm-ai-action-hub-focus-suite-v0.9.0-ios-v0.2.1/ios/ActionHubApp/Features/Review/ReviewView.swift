@@ -38,17 +38,33 @@ struct ReviewView: View {
 private struct ReviewPlanRow: View {
   let plan: ActionPlan
 
+  /// For a capture the parser found nothing in, the server summary reads
+  /// "0개 항목 · 실행 가능 0개" -- true, and useless for recognising which share this was.
+  /// Show the captured text instead, which is the only thing that identifies it.
+  private var headline: String {
+    guard plan.items.isEmpty else {
+      return plan.summary.isEmpty ? "Action Plan" : plan.summary
+    }
+    let raw = (plan.inbox?.rawText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    return raw.isEmpty ? "실행할 일 없음" : raw
+  }
+
   var body: some View {
     VStack(alignment: .leading, spacing: 7) {
       HStack {
-        Text(plan.summary.isEmpty ? "Action Plan" : plan.summary)
+        Text(headline)
           .font(.headline)
           .lineLimit(2)
         Spacer()
-        Text("\(plan.items.count)건")
+        Text(plan.items.isEmpty ? "원문만" : "\(plan.items.count)건")
           .font(.caption.bold())
           .padding(.horizontal, 8).padding(.vertical, 4)
           .background(.tint.opacity(0.12), in: Capsule())
+      }
+      if plan.items.isEmpty {
+        Text("실행할 일을 찾지 못해 원문만 보관했습니다.")
+          .font(.caption)
+          .foregroundStyle(.secondary)
       }
       HStack(spacing: 10) {
         Label(plan.status, systemImage: "circle.dotted")

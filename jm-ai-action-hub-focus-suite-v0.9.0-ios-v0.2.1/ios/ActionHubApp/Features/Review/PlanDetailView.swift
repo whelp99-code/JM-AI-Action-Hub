@@ -34,6 +34,13 @@ struct PlanDetailView: View {
     plan?.items.contains { !Self.terminalItemStates.contains($0.state) } ?? false
   }
 
+  /// A capture the parser found no action in. It still reaches this screen so the share
+  /// is not silently lost, which means the dismiss control has to work here too -- it is
+  /// gated on `hasActionableItems`, and an empty capture has none by definition.
+  private var isEmptyCapture: Bool {
+    plan.map { $0.items.isEmpty } ?? false
+  }
+
   var body: some View {
     Group {
       if let plan {
@@ -47,7 +54,22 @@ struct PlanDetailView: View {
             Text("계획")
           }
 
+          if isEmptyCapture {
+            Section("수집한 원문") {
+              Text(plan.inbox?.rawText ?? "원문을 불러오지 못했습니다.")
+                .font(.callout)
+                .textSelection(.enabled)
+              Text("이 내용에서는 실행할 일을 찾지 못했습니다. 보관만 되어 있으며, 치우면 목록에서 사라집니다.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            }
+          }
+
           Section("실행 항목") {
+            if plan.items.isEmpty {
+              Text("없음")
+                .foregroundStyle(.secondary)
+            }
             ForEach(plan.items) { item in
               Button {
                 selectedItem = item
@@ -76,14 +98,21 @@ struct PlanDetailView: View {
             Button(role: .destructive) {
               showRejectConfirmation = true
             } label: {
-              Label("전체 제외", systemImage: "xmark.circle")
+              Label(isEmptyCapture ? "치우기" : "전체 제외", systemImage: "xmark.circle")
             }
-            .disabled(isWorking || !hasActionableItems)
+            .disabled(isWorking || (!hasActionableItems && !isEmptyCapture))
           }
         }
         .refreshable { await Task { await load() }.value }
-        .confirmationDialog("이 계획의 모든 항목을 제외합니까?", isPresented: $showRejectConfirmation) {
-          Button("전체 제외", role: .destructive) { Task { await reject(plan) } }
+        .confirmationDialog(
+          isEmptyCapture
+            ? "이 수집을 목록에서 치웁니까? 원문은 서버에 남습니다."
+            : "이 계획의 모든 항목을 제외합니까?",
+          isPresented: $showRejectConfirmation
+        ) {
+          Button(isEmptyCapture ? "치우기" : "전체 제외", role: .destructive) {
+            Task { await reject(plan) }
+          }
         }
         .sheet(item: $selectedItem) { item in
           ActionItemEditor(plan: plan, item: item) { updated in
