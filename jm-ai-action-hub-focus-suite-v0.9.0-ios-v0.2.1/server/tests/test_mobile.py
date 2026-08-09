@@ -1311,3 +1311,61 @@ def test_review_list_limit_is_plan_scoped_not_join_row_scoped(client):
     assert busy_plan_id in returned_ids
     assert other_plan_ids[0] in returned_ids
     assert other_plan_ids[1] in returned_ids
+
+
+def test_capture_with_no_actions_stays_visible_until_dismissed(client, monkeypatch):
+    # The LLM parsers are allowed to return nothing when a shared message holds no
+    # commitment -- forwarded chatter, a bare link -- and that is the right answer.
+    # The review list joined items with an INNER JOIN, so those plans vanished and
+    # the share looked lost with no trace anywhere in the app. Measured on a real
+    # KakaoTalk forward: two shares arrived, both parsed to zero items, neither was
+    # visible. The rules parser always emits at least one item, so only the llm and
+    # hybrid modes can reach this state.
+    from action_hub.services import planner
+
+    class _NothingParser:
+        name = "nothing-v1"
+
+        def parse(self, text, reference, timezone_name):
+            return []
+
+    monkeypatch.setattr(planner, "build_parser", lambda settings: _NothingParser())
+
+    tokens = _pair(client)
+    headers = _auth(tokens)
+    receipt = client.post(
+        "/api/v1/mobile/captures/batch",
+        headers=headers,
+        json={
+            "captures": [
+                {
+                    "client_capture_id": str(uuid.uuid4()),
+                    "text": "미세팁인데 요새 비행기 와이파이 참고하세요",
+                    "reference_time": "2026-08-08T23:17:00+09:00",
+                }
+            ]
+        },
+    ).json()["receipts"][0]
+    assert receipt["status"] == "processed"
+    plan_id = receipt["plan_id"]
+
+    plan = client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+    assert plan["items"] == []
+
+    review = client.get("/api/v1/mobile/review", headers=headers)
+    assert review.status_code == 200
+    assert any(entry["id"] == plan_id for entry in review.json())
+
+    dashboard = client.get("/api/v1/mobile/dashboard", headers=headers).json()
+    assert dashboard["review_count"] >= 1
+
+    dismissed = client.post(
+        f"/api/v1/mobile/plans/{plan_id}/reject",
+        headers=headers,
+        json={"reason": "실행할 일이 없음"},
+    )
+    assert dismissed.status_code == 200, dismissed.text
+
+    after = client.get("/api/v1/mobile/review", headers=headers).json()
+    assert all(entry["id"] != plan_id for entry in after)
+    assert client.get("/api/v1/mobile/dashboard", headers=headers).json()["review_count"] == 0

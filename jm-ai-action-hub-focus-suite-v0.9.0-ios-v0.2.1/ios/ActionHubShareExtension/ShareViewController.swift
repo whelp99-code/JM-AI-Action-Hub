@@ -53,9 +53,12 @@ final class ShareViewController: UIViewController {
         source: "ios-share-extension",
         metadata: ["share_item_count": .number(Double(fragments.count))]
       )
-      statusLabel.text = "Action Hub에 안전하게 저장했습니다."
+      // "저장했습니다" alone read as "it is in the app now", so a share that parsed to
+      // nothing looked like a failure. Name the second step the user still has to take.
+      statusLabel.text = "Action Hub 수집함에 저장했습니다.\n앱을 열면 분석해서 검토 탭에 표시합니다."
+      statusLabel.numberOfLines = 0
       spinner.stopAnimating()
-      try? await Task.sleep(for: .milliseconds(350))
+      try? await Task.sleep(for: .milliseconds(900))
       extensionContext?.completeRequest(returningItems: nil)
     } catch {
       statusLabel.text = error.localizedDescription

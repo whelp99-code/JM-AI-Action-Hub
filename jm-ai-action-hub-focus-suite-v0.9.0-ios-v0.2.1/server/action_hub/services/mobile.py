@@ -20,6 +20,7 @@ from ..models import (
     ItemState,
     MobileCapture,
     MobileDevice,
+    PlanStatus,
     WorkerExecution,
     utcnow,
 )
@@ -91,6 +92,15 @@ def _needs_review_item_filter():
     )
 
 
+def _captured_nothing_filter():
+    # A capture whose parser found no action at all still produced a plan, and the
+    # user has no other way to learn their share arrived: an INNER JOIN on items
+    # dropped those plans from the queue entirely, so the share looked lost. They
+    # stay until rejected, which recalculate_plan_status() also maps to REJECTED
+    # for an item-less plan -- so the existing reject endpoint dismisses them.
+    return and_(ActionItem.id.is_(None), ActionPlan.status == PlanStatus.DRAFT.value)
+
+
 def list_review_plans(db: Session, limit: int = 50) -> list[ActionPlan]:
     # LIMIT must apply to distinct plans, not joined item rows: a single plan
     # with many needs_review items could otherwise exhaust the limit on its own
@@ -100,8 +110,8 @@ def list_review_plans(db: Session, limit: int = 50) -> list[ActionPlan]:
     plan_ids = list(
         db.scalars(
             select(ActionPlan.id, ActionPlan.updated_at)
-            .join(ActionItem)
-            .where(_needs_review_item_filter())
+            .outerjoin(ActionItem)
+            .where(or_(_needs_review_item_filter(), _captured_nothing_filter()))
             .distinct()
             .order_by(desc(ActionPlan.updated_at))
             .limit(limit)
@@ -195,8 +205,8 @@ def build_mobile_dashboard(
         db.scalar(
             select(func.count(func.distinct(ActionPlan.id)))
             .select_from(ActionPlan)
-            .join(ActionItem)
-            .where(_needs_review_item_filter())
+            .outerjoin(ActionItem)
+            .where(or_(_needs_review_item_filter(), _captured_nothing_filter()))
         )
         or 0
     )
