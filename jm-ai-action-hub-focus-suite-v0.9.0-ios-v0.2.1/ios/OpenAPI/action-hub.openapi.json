@@ -814,6 +814,70 @@
         "title": "ApprovalRequest",
         "type": "object"
       },
+      "Big3RecommendationRead": {
+        "properties": {
+          "action": {
+            "$ref": "#/components/schemas/FocusActionSummary"
+          },
+          "owner_type": {
+            "enum": [
+              "human",
+              "ai"
+            ],
+            "title": "Owner Type",
+            "type": "string"
+          },
+          "processing_intensity": {
+            "enum": [
+              "light",
+              "medium",
+              "heavy"
+            ],
+            "title": "Processing Intensity",
+            "type": "string"
+          },
+          "rank": {
+            "maximum": 3.0,
+            "minimum": 1.0,
+            "title": "Rank",
+            "type": "integer"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "remaining_minutes": {
+            "title": "Remaining Minutes",
+            "type": "integer"
+          },
+          "schedule_fit": {
+            "enum": [
+              "fits",
+              "over_capacity"
+            ],
+            "title": "Schedule Fit",
+            "type": "string"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          }
+        },
+        "required": [
+          "action",
+          "owner_type",
+          "rank",
+          "score",
+          "processing_intensity",
+          "schedule_fit",
+          "remaining_minutes"
+        ],
+        "title": "Big3RecommendationRead",
+        "type": "object"
+      },
       "BriefItem": {
         "properties": {
           "destination": {
@@ -1684,6 +1748,18 @@
             "title": "Ai Committed Minutes",
             "type": "integer"
           },
+          "ai_recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/Big3RecommendationRead"
+            },
+            "title": "Ai Recommendations",
+            "type": "array"
+          },
+          "ai_remaining_minutes": {
+            "default": 0,
+            "title": "Ai Remaining Minutes",
+            "type": "integer"
+          },
           "available_minutes": {
             "title": "Available Minutes",
             "type": "integer"
@@ -1702,6 +1778,18 @@
           },
           "human_committed_minutes": {
             "title": "Human Committed Minutes",
+            "type": "integer"
+          },
+          "human_recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/Big3RecommendationRead"
+            },
+            "title": "Human Recommendations",
+            "type": "array"
+          },
+          "human_remaining_minutes": {
+            "default": 0,
+            "title": "Human Remaining Minutes",
             "type": "integer"
           },
           "overload_minutes": {
@@ -1770,6 +1858,34 @@
         "title": "ExecuteRequest",
         "type": "object"
       },
+      "ExecutionErrorEntry": {
+        "properties": {
+          "attempts": {
+            "default": 0,
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "item_id": {
+            "title": "Item Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_id",
+          "title",
+          "error"
+        ],
+        "title": "ExecutionErrorEntry",
+        "type": "object"
+      },
       "ExecutionSummary": {
         "properties": {
           "action_completed": {
@@ -1780,6 +1896,13 @@
           "completed": {
             "title": "Completed",
             "type": "integer"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/ExecutionErrorEntry"
+            },
+            "title": "Errors",
+            "type": "array"
           },
           "failed": {
             "title": "Failed",
@@ -1811,6 +1934,11 @@
           "registered": {
             "default": 0,
             "title": "Registered",
+            "type": "integer"
+          },
+          "retrying": {
+            "default": 0,
+            "title": "Retrying",
             "type": "integer"
           },
           "skipped_duplicate": {
@@ -1977,6 +2105,11 @@
             ],
             "title": "Due At"
           },
+          "energy_level": {
+            "default": "medium",
+            "title": "Energy Level",
+            "type": "string"
+          },
           "estimated_minutes": {
             "title": "Estimated Minutes",
             "type": "integer"
@@ -2055,6 +2188,67 @@
           "attention_state"
         ],
         "title": "FocusActionSummary",
+        "type": "object"
+      },
+      "FocusDashboardSummary": {
+        "properties": {
+          "active_focus": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FocusSessionRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "ai_big3": {
+            "items": {
+              "$ref": "#/components/schemas/DailyCommitmentRead"
+            },
+            "title": "Ai Big3",
+            "type": "array"
+          },
+          "ai_big3_recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/Big3RecommendationRead"
+            },
+            "title": "Ai Big3 Recommendations",
+            "type": "array"
+          },
+          "human_big3": {
+            "items": {
+              "$ref": "#/components/schemas/DailyCommitmentRead"
+            },
+            "title": "Human Big3",
+            "type": "array"
+          },
+          "human_big3_recommendations": {
+            "items": {
+              "$ref": "#/components/schemas/Big3RecommendationRead"
+            },
+            "title": "Human Big3 Recommendations",
+            "type": "array"
+          },
+          "matrix_counts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Matrix Counts",
+            "type": "object"
+          },
+          "untriaged_count": {
+            "default": 0,
+            "title": "Untriaged Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "matrix_counts",
+          "human_big3",
+          "ai_big3"
+        ],
+        "title": "FocusDashboardSummary",
         "type": "object"
       },
       "FocusSessionRead": {
@@ -3984,9 +4178,14 @@
             "type": "integer"
           },
           "focus_summary": {
-            "additionalProperties": true,
-            "title": "Focus Summary",
-            "type": "object"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FocusDashboardSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "generated_at": {
             "format": "date-time",
@@ -4801,6 +5000,13 @@
       },
       "PlanRead": {
         "properties": {
+          "blocked_item_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Blocked Item Ids",
+            "type": "array"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -8004,6 +8210,63 @@
         "summary": "Mobile Update Focus",
         "tags": [
           "mobile-focus"
+        ]
+      }
+    },
+    "/api/v1/mobile/followups/{followup_id}/resolve": {
+      "post": {
+        "operationId": "resolveMobileFollowup",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "followup_id",
+            "required": true,
+            "schema": {
+              "title": "Followup Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FollowUpResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowUpRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "ActionHubMobileBearer": []
+          }
+        ],
+        "summary": "Resolve Mobile Followup",
+        "tags": [
+          "mobile"
         ]
       }
     },

@@ -42,6 +42,7 @@ class FocusActionSummary(BaseModel):
     deadline_at: datetime | None = None
     external_url: str | None = None
     assessment: PriorityAssessmentRead | None = None
+    energy_level: str = "medium"
 
 
 class TriageResponse(BaseModel):
@@ -84,6 +85,17 @@ class DailyCommitmentRead(BaseModel):
     action: FocusActionSummary | None = None
 
 
+class Big3RecommendationRead(BaseModel):
+    action: FocusActionSummary
+    owner_type: Literal["human", "ai"]
+    rank: int = Field(ge=1, le=3)
+    score: float
+    processing_intensity: Literal["light", "medium", "heavy"]
+    schedule_fit: Literal["fits", "over_capacity"]
+    remaining_minutes: int
+    reasons: list[str] = Field(default_factory=list)
+
+
 class DualBig3Request(BaseModel):
     target_date: date | None = None
     human_item_ids: list[str] = Field(default_factory=list, max_length=3)
@@ -108,6 +120,10 @@ class DualBig3Response(BaseModel):
     human: list[DailyCommitmentRead]
     ai: list[DailyCommitmentRead]
     warnings: list[str]
+    human_remaining_minutes: int = 0
+    ai_remaining_minutes: int = 0
+    human_recommendations: list[Big3RecommendationRead] = Field(default_factory=list)
+    ai_recommendations: list[Big3RecommendationRead] = Field(default_factory=list)
 
 
 class MicroStepInput(BaseModel):
@@ -292,3 +308,5 @@ class FocusDashboardSummary(BaseModel):
     ai_big3: list[DailyCommitmentRead]
     active_focus: FocusSessionRead | None = None
     untriaged_count: int = 0
+    human_big3_recommendations: list[Big3RecommendationRead] = Field(default_factory=list)
+    ai_big3_recommendations: list[Big3RecommendationRead] = Field(default_factory=list)

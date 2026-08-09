@@ -557,6 +557,60 @@ def test_mobile_capture_batch_is_idempotent_and_exposes_review(client):
     assert any(plan["id"] == receipt["plan_id"] for plan in review.json())
 
 
+def test_mobile_followup_resolution_updates_waiting_workflow(client):
+    tokens = _pair(client)
+    headers = _auth(tokens)
+    capture = client.post(
+        "/api/v1/mobile/captures/batch",
+        headers=headers,
+        json={
+            "captures": [
+                {
+                    "client_capture_id": str(uuid.uuid4()),
+                    "text": "협력사 견적 회신 확인",
+                    "reference_time": "2026-07-30T09:00:00+09:00",
+                }
+            ]
+        },
+    )
+    assert capture.status_code == 200, capture.text
+    plan_id = capture.json()["receipts"][0]["plan_id"]
+    item = client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()["items"][0]
+
+    # The admin follow-up creation API is the existing server-side source of a
+    # waiting item; the assertion below is specifically for the mobile resolve
+    # boundary that the iOS Today screen uses.
+    created = client.post(
+        f"/api/v1/items/{item['id']}/followups",
+        json={
+            "waiting_for": "협력사",
+            "channel": "email",
+            "follow_up_at": "2030-01-02T10:00:00+09:00",
+        },
+    )
+    assert created.status_code == 200, created.text
+    followup_id = created.json()["id"]
+
+    followed_up = client.post(
+        f"/api/v1/mobile/followups/{followup_id}/resolve",
+        headers=headers,
+        json={"state": "followed_up", "note": "메일을 다시 보냈습니다."},
+    )
+    assert followed_up.status_code == 200, followed_up.text
+    assert followed_up.json()["state"] == "followed_up"
+
+    response_received = client.post(
+        f"/api/v1/mobile/followups/{followup_id}/resolve",
+        headers=headers,
+        json={"state": "response_received", "note": "협력사 회신을 받았습니다."},
+    )
+    assert response_received.status_code == 200, response_received.text
+    assert response_received.json()["state"] == "response_received"
+    refreshed = client.get(f"/api/v1/mobile/plans/{plan_id}", headers=headers).json()
+    assert refreshed["items"][0]["state"] == "human_review"
+    assert refreshed["items"][0]["completion_evidence"] == "협력사 회신을 받았습니다."
+
+
 
 def test_mobile_capture_same_id_concurrent_retry_is_not_an_http_500(client):
     tokens = _pair(client)

@@ -419,6 +419,19 @@ final class AppModel: ObservableObject {
     return started
   }
 
+  /// Starts a focus session directly from the Today decision queue. The dashboard exposes a
+  /// `DecisionItem` rather than the richer Focus model, but the server only needs its action-item
+  /// identifier to create a session. This keeps Today useful without duplicating triage state.
+  @discardableResult
+  func startFocus(on item: DecisionItem, minutes: Int = 25) async throws -> FocusSession {
+    let started = try await session.startFocusSession(
+      FocusSessionStartRequest(actionItemId: item.actionItemId, plannedMinutes: minutes))
+    activeFocus = started
+    await liveActivity.start(session: started)
+    try await refreshFocus()
+    return started
+  }
+
   @discardableResult
   func updateFocus(
     action: String,
@@ -451,6 +464,20 @@ final class AppModel: ObservableObject {
     let response = try await session.closeFocusDay(DayCloseRequest(decisions: decisions))
     try await refreshFocus()
     return response
+  }
+
+  @discardableResult
+  func resolveFollowup(
+    _ followup: FollowUp,
+    state: String,
+    note: String = ""
+  ) async throws -> FollowUp {
+    let updated = try await session.resolveFollowup(
+      id: followup.id,
+      request: FollowUpResolveRequest(state: state, note: note)
+    )
+    await refreshAll()
+    return updated
   }
 
   func loadFocusWeeklyReport() async {

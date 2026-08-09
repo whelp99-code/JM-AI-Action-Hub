@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from ..config import Settings
 from ..focus_schemas import (
+    Big3RecommendationRead,
     CarryOverDecisionRead,
     ClassifyActionRequest,
     DailyCommitmentRead,
@@ -213,6 +214,7 @@ def _action_summary(item: ActionItem, settings: Settings, *, suggest_if_missing:
         deadline_at=item.deadline_at,
         external_url=item.external_url,
         assessment=assessment,
+        energy_level=item.energy_level or "medium",
     )
 
 
@@ -382,6 +384,129 @@ def _commitment_read(row: DailyCommitment, settings: Settings) -> DailyCommitmen
     return result.model_copy(update={"action": _action_summary(row.action_item, settings)})
 
 
+def _processing_intensity(item: ActionItem, settings: Settings) -> tuple[str, str]:
+    estimate = item.estimated_minutes or settings.default_estimated_minutes
+    energy = (item.energy_level or "medium").lower()
+    if estimate >= 90 or energy == "high" or item.work_mode == "deep":
+        return "heavy", "집중 처리"
+    if estimate <= 20 and energy == "low" or item.work_mode in {"shallow", "admin", "errand"}:
+        return "light", "가벼운 처리"
+    return "medium", "보통 처리"
+
+
+def _big3_recommendations(
+    items: list[ActionItem],
+    settings: Settings,
+    *,
+    owner: str,
+    remaining_minutes: int,
+    slots: int,
+) -> list[Big3RecommendationRead]:
+    if slots <= 0 or not items:
+        return []
+
+    ranked: list[tuple[float, float, float, ActionItem, PriorityAssessmentRead, str, str]] = []
+    for item in items:
+        if owner == "human":
+            if item.executor not in {
+                ExecutorType.HUMAN.value,
+                ExecutorType.HYBRID.value,
+                ExecutorType.EXTERNAL.value,
+            }:
+                continue
+        elif item.executor not in {ExecutorType.AI.value, ExecutorType.HYBRID.value}:
+            continue
+
+        assessment = _assessment_read(item.priority_assessment) or suggested_assessment(item, settings)
+        if assessment.quadrant == Quadrant.Q4:
+            continue
+        estimate = item.estimated_minutes or settings.default_estimated_minutes
+        intensity, intensity_title = _processing_intensity(item, settings)
+        fits = estimate <= remaining_minutes
+        deficit = max(0, estimate - remaining_minutes)
+
+        # Importance and urgency lead the decision. Schedule fit is a strong
+        # tie-breaker so a recommendation does not silently consume tomorrow's
+        # capacity, while intensity keeps a very deep task from crowding out
+        # every smaller, finishable task.
+        score = assessment.importance_score * 0.48 + assessment.urgency_score * 0.37
+        score += 18 if fits else -min(30.0, deficit * 0.5)
+        if intensity == "heavy" and remaining_minutes >= estimate:
+            score += 5
+        elif intensity == "light" and remaining_minutes <= 45:
+            score += 6
+        if assessment.quadrant == Quadrant.Q1:
+            score += 6
+        ranked.append((score, assessment.importance_score, assessment.urgency_score, item, assessment, intensity, intensity_title))
+
+    ranked.sort(key=lambda row: (-row[0], -row[1], -row[2], row[3].estimated_minutes or settings.default_estimated_minutes, row[3].title, row[3].id))
+
+    selected: list[tuple[float, float, float, ActionItem, PriorityAssessmentRead, str, str, int, bool]] = []
+    budget = max(0, remaining_minutes)
+    for candidate in ranked:
+        if len(selected) >= slots:
+            break
+        estimate = candidate[3].estimated_minutes or settings.default_estimated_minutes
+        if estimate <= budget:
+            selected.append((*candidate, budget, True))
+            budget -= estimate
+
+    # When no candidate fits, return one explicit exception rather than three
+    # attractive-looking commitments that guarantee an overloaded day.
+    if not selected and ranked:
+        selected = [(*ranked[0], max(0, remaining_minutes), False)]
+
+    recommendations: list[Big3RecommendationRead] = []
+    for rank, candidate in enumerate(selected, 1):
+        score, importance, urgency, item, assessment, intensity, intensity_title, before, fits = candidate
+        estimate = item.estimated_minutes or settings.default_estimated_minutes
+        after = before - estimate if fits else max(0, before)
+        reasons = [f"중요도 {round(importance)} · 긴급도 {round(urgency)}"]
+        if fits:
+            reasons.append(f"남은 일정 {before}분에 맞고 완료 후 {after}분이 남음")
+        else:
+            reasons.append(f"남은 일정보다 {estimate - before}분 더 필요해 용량 초과")
+        reasons.append(f"{intensity_title} · 예상 {estimate}분")
+        if assessment.quadrant == Quadrant.Q1:
+            reasons.append("중요하고 긴급한 Q1 업무")
+        elif assessment.quadrant == Quadrant.Q2:
+            reasons.append("중요도를 지켜야 하는 Q2 업무")
+        elif owner == "ai":
+            reasons.append("AI 실행자로 지정되어 위임하기 좋음")
+        recommendations.append(
+            Big3RecommendationRead(
+                action=_action_summary(item, settings, suggest_if_missing=True),
+                owner_type=owner,
+                rank=rank,
+                score=round(score, 2),
+                processing_intensity=intensity,
+                schedule_fit="fits" if fits else "over_capacity",
+                remaining_minutes=after,
+                reasons=reasons,
+            )
+        )
+    return recommendations
+
+
+def _big3_candidate_rows(db: Session, selected_ids: set[str]) -> list[ActionItem]:
+    filters = [
+        ActionItem.state.notin_(TERMINAL_STATES),
+        ActionItem.state != ItemState.WAITING.value,
+        ActionItem.attention_state != AttentionState.UNTRIAGED.value,
+        or_(ActionItem.needs_review.is_(False), ActionItem.needs_review.is_(None)),
+    ]
+    if selected_ids:
+        filters.append(ActionItem.id.notin_(selected_ids))
+    return list(
+        db.scalars(
+            select(ActionItem)
+            .where(*filters)
+            .options(selectinload(ActionItem.priority_assessment))
+            .order_by(ActionItem.deadline_at.is_(None), ActionItem.deadline_at, ActionItem.created_at)
+        )
+    )
+
+
 def get_big3(db: Session, settings: Settings, target_date: date | None = None) -> DualBig3Response:
     tz = ZoneInfo(settings.timezone)
     day = target_date or datetime.now(tz).date()
@@ -402,11 +527,33 @@ def get_big3(db: Session, settings: Settings, target_date: date | None = None) -
     plan = db.scalar(select(DailyFocusPlan).where(DailyFocusPlan.plan_date == day))
     capacity = plan.available_minutes if plan is not None else settings.default_workday_minutes
     overload = max(0, human_minutes - capacity)
+    selected_ids = {row.action_item_id for row in rows}
+    candidates = _big3_candidate_rows(db, selected_ids)
+    human_remaining = max(0, capacity - human_minutes)
+    ai_remaining = max(0, capacity - ai_minutes)
+    human_recommendations = _big3_recommendations(
+        candidates,
+        settings,
+        owner="human",
+        remaining_minutes=human_remaining,
+        slots=max(0, settings.big3_limit - len(human)),
+    )
+    ai_recommendations = _big3_recommendations(
+        candidates,
+        settings,
+        owner="ai",
+        remaining_minutes=ai_remaining,
+        slots=max(0, settings.big3_limit - len(ai)),
+    )
     warnings: list[str] = []
     if overload:
         warnings.append(f"사람 Big3가 기본 가용시간보다 {overload}분 많습니다.")
     if len(human) < settings.big3_limit:
         warnings.append(f"내 Big3가 {len(human)}건입니다. 핵심 약속을 최대 {settings.big3_limit}건까지 선택할 수 있습니다.")
+    if not human and human_recommendations:
+        warnings.append("일정·처리 강도·중요도·긴급도를 반영한 내 Big3 제안이 있습니다.")
+    if not ai and ai_recommendations:
+        warnings.append("AI 실행 가능 업무를 기준으로 AI Big3 제안이 있습니다.")
     return DualBig3Response(
         date=day,
         available_minutes=capacity,
@@ -416,6 +563,10 @@ def get_big3(db: Session, settings: Settings, target_date: date | None = None) -
         human=human,
         ai=ai,
         warnings=warnings,
+        human_remaining_minutes=human_remaining,
+        ai_remaining_minutes=ai_remaining,
+        human_recommendations=human_recommendations,
+        ai_recommendations=ai_recommendations,
     )
 
 
@@ -1102,4 +1253,6 @@ def dashboard_focus_summary(db: Session, settings: Settings) -> FocusDashboardSu
         ai_big3=big3.ai,
         active_focus=active_focus(db, settings),
         untriaged_count=matrix_response.untriaged_count,
+        human_big3_recommendations=big3.human_recommendations,
+        ai_big3_recommendations=big3.ai_recommendations,
     )

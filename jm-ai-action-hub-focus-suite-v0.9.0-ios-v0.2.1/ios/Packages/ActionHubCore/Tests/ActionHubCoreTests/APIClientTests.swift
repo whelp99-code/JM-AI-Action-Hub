@@ -33,6 +33,33 @@ final class APIClientTests: XCTestCase {
     XCTAssertEqual(request.url?.path, "/api/v1/mobile/dashboard")
   }
 
+  func testResolveFollowupUsesMobileEditRoute() async throws {
+    let recorder = RequestRecorder()
+    let transport = ClosureTransport { request in
+      await recorder.append(request)
+      let data = Data(Self.followupJSON.utf8)
+      let response = HTTPURLResponse(
+        url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!
+      return (data, response)
+    }
+    let client = try ActionHubAPIClient(
+      baseURL: URL(string: "https://hub.example.com")!, transport: transport)
+    let followup = try await client.resolveFollowup(
+      id: "follow/up-1",
+      request: FollowUpResolveRequest(state: "response_received", note: "회신 확인"),
+      accessToken: "access-token")
+    XCTAssertEqual(followup.state, "response_received")
+    let recorded = await recorder.all()
+    let request = try XCTUnwrap(recorded.first)
+    XCTAssertEqual(request.httpMethod, "POST")
+    XCTAssertTrue(request.url?.absoluteString.contains("follow%2Fup-1/resolve") == true)
+    XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer access-token")
+    let body = try XCTUnwrap(request.httpBody)
+    let object = try XCTUnwrap(JSONSerialization.jsonObject(with: body) as? [String: String])
+    XCTAssertEqual(object["state"], "response_received")
+    XCTAssertEqual(object["note"], "회신 확인")
+  }
+
   func testDynamicIdentifiersAreEncodedAsSinglePathSegments() async throws {
     let recorder = RequestRecorder()
     let transport = ClosureTransport { request in
@@ -83,6 +110,17 @@ final class APIClientTests: XCTestCase {
           "decision":{"date":"2026-07-31","generated_at":"2026-07-31T01:00:00Z","available_minutes":480,"buffer_minutes":60,"planned_minutes":0,"overload_minutes":0,"top_items":[],"deferred_items":[],"ai_delegation_candidates":[],"waiting_followups":[],"risks":[],"summary":"none"},
           "recent_activity":[]
         }
+    """#
+
+  static let followupJSON = #"""
+    {
+      "id":"follow-up-1","action_item_id":"item-1","state":"response_received",
+      "waiting_for":"협력사","channel":"email","expected_by":null,
+      "follow_up_at":"2030-01-02T10:00:00Z","template":null,"reminder_count":0,
+      "last_reminded_at":null,"response_received_at":"2030-01-02T10:00:00Z",
+      "created_at":"2030-01-01T10:00:00Z","updated_at":"2030-01-02T10:00:00Z",
+      "action_title":"견적 회신 확인"
+    }
     """#
 }
 

@@ -175,6 +175,18 @@ public struct FollowUp: Codable, Sendable, Equatable, Identifiable {
   public let actionTitle: String?
 }
 
+public struct FollowUpResolveRequest: Codable, Sendable, Equatable {
+  public let state: String
+  public let actor: String
+  public let note: String
+
+  public init(state: String, note: String = "", actor: String = "user") {
+    self.state = state
+    self.note = note
+    self.actor = actor
+  }
+}
+
 public struct DecisionPlan: Codable, Sendable, Equatable {
   public let date: String
   public let generatedAt: Date

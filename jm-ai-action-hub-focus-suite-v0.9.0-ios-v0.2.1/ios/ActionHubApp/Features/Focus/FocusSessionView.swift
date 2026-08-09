@@ -5,6 +5,8 @@ struct FocusSessionView: View {
   @EnvironmentObject private var model: AppModel
   @State private var selectedItem: FocusActionSummary?
   @State private var isWorking = false
+  @State private var completionNote = ""
+  @State private var showCompletionEvidence = false
 
   var body: some View {
     ScrollView {
@@ -16,6 +18,9 @@ struct FocusSessionView: View {
     }
     .padding()
     .refreshable { await model.refreshAllDetached() }
+    .sheet(isPresented: $showCompletionEvidence) {
+      completionEvidenceSheet
+    }
   }
 
   private func activeSession(_ session: FocusSession) -> some View {
@@ -68,10 +73,58 @@ struct FocusSessionView: View {
         HStack {
           control("종료", icon: "stop.fill", role: .destructive) { await update("abandon") }
           control("완료", icon: "checkmark", prominent: true) {
-            await update("complete", markCompleted: true)
+            await requestCompletionEvidence()
           }
         }
       }
+    }
+  }
+
+  private var completionEvidenceSheet: some View {
+    NavigationStack {
+      Form {
+        Section("완료 증거") {
+          TextEditor(text: $completionNote)
+            .frame(minHeight: 120)
+          Text("무엇을 했는지 한 줄로 남겨야 업무가 실제 완료 처리됩니다.")
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+        }
+      }
+      .navigationTitle("업무 완료")
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("취소") { showCompletionEvidence = false }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button("완료") { Task { await completeWithEvidence() } }
+            .disabled(completionNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+      }
+    }
+    .presentationDetents([.medium])
+  }
+
+  private func requestCompletionEvidence() async {
+    completionNote = ""
+    showCompletionEvidence = true
+  }
+
+  private func completeWithEvidence() async {
+    let note = completionNote.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !note.isEmpty, !isWorking else { return }
+    showCompletionEvidence = false
+    isWorking = true
+    defer { isWorking = false }
+    do {
+      _ = try await model.updateFocus(
+        action: "complete",
+        completionNote: note,
+        markActionCompleted: true
+      )
+    } catch {
+      model.lastError = error.localizedDescription
     }
   }
 
@@ -146,7 +199,7 @@ struct FocusSessionView: View {
     do {
       _ = try await model.updateFocus(
         action: action, extensionMinutes: extensionMinutes,
-        completionNote: action == "complete" ? "iOS Focus에서 완료" : nil,
+        completionNote: nil,
         markActionCompleted: markCompleted)
     } catch { model.lastError = error.localizedDescription }
   }
