@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>클로드가 할 수 있는 일</title>
+<style>
+  :root {
+    --bg: #f7f6f3;
+    --card: #ffffff;
+    --ink: #1f2430;
+    --ink-soft: #5b6376;
+    --line: #e4e2dc;
+    --accent: #2f6f68;
+    --accent-soft: #e8f1ef;
+    --warn: #8a5a1f;
+    --warn-soft: #fbf1e0;
+    --code-bg: #f2f4f7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a;
+      --card: #1c1f26;
+      --ink: #e8eaef;
+      --ink-soft: #a2aab9;
+      --line: #2c313b;
+      --accent: #6cc0b4;
+      --accent-soft: #1d2b2a;
+      --warn: #d8a75c;
+      --warn-soft: #2a2317;
+      --code-bg: #232730;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Pretendard", "Apple SD Gothic Neo",
+                 "Noto Sans KR", "Malgun Gothic", sans-serif;
+    font-size: 17px;
+    line-height: 1.75;
+    letter-spacing: -0.01em;
+    word-break: keep-all;
+  }
+  .wrap { max-width: 780px; margin: 0 auto; padding: 56px 22px 96px; }
+
+  header { margin-bottom: 44px; }
+  .kicker {
+    display: inline-block;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    background: var(--accent-soft);
+    padding: 5px 12px;
+    border-radius: 999px;
+    margin-bottom: 18px;
+  }
+  h1 { font-size: 34px; line-height: 1.35; margin: 0 0 14px; letter-spacing: -0.03em; }
+  .lede { font-size: 19px; color: var(--ink-soft); margin: 0; }
+
+  section {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 30px 28px;
+    margin-bottom: 22px;
+  }
+  h2 {
+    font-size: 21px;
+    margin: 0 0 6px;
+    letter-spacing: -0.02em;
+  }
+  h2 + .sub { margin: 0 0 22px; color: var(--ink-soft); font-size: 15px; }
+  h3 { font-size: 17px; margin: 26px 0 8px; }
+  p { margin: 0 0 14px; }
+  p:last-child, ul:last-child { margin-bottom: 0; }
+  ul { margin: 0 0 14px; padding-left: 20px; }
+  li { margin-bottom: 8px; }
+  strong { font-weight: 650; }
+
+  .grid { display: grid; gap: 14px; grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 620px) { .grid { grid-template-columns: 1fr; } }
+  .item {
+    border: 1px solid var(--line);
+    border-radius: 11px;
+    padding: 18px 18px 16px;
+    background: var(--bg);
+  }
+  .item h4 { margin: 0 0 6px; font-size: 16px; }
+  .item p { margin: 0; font-size: 15px; color: var(--ink-soft); line-height: 1.65; }
+
+  .say {
+    background: var(--code-bg);
+    border-left: 3px solid var(--accent);
+    border-radius: 0 8px 8px 0;
+    padding: 13px 16px;
+    margin: 0 0 10px;
+    font-size: 15.5px;
+    color: var(--ink);
+  }
+  .say::before {
+    content: "이렇게 말하세요";
+    display: block;
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    color: var(--accent);
+    margin-bottom: 5px;
+  }
+
+  .compare { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; margin-bottom: 8px; }
+  @media (max-width: 620px) { .compare { grid-template-columns: 1fr; } }
+  .bad, .good { border-radius: 10px; padding: 15px 16px; font-size: 15px; }
+  .bad { background: var(--warn-soft); }
+  .good { background: var(--accent-soft); }
+  .bad b, .good b { display: block; font-size: 12px; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .bad b { color: var(--warn); }
+  .good b { color: var(--accent); }
+
+  .note {
+    background: var(--warn-soft);
+    border-radius: 10px;
+    padding: 16px 18px;
+    font-size: 15px;
+  }
+
+  table { width: 100%; border-collapse: collapse; font-size: 15px; margin-bottom: 8px; }
+  th, td { text-align: left; padding: 11px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--ink-soft); font-weight: 600; font-size: 13.5px; white-space: nowrap; }
+  td:first-child { white-space: nowrap; color: var(--accent); font-weight: 600; }
+
+  footer { margin-top: 40px; color: var(--ink-soft); font-size: 14px; text-align: center; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 26px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <span class="kicker">사용 안내</span>
+  <h1>클로드가 할 수 있는 일</h1>
+  <p class="lede">
+    "쓸 수 있는 기능이 거의 없다"고 느끼신 게 맞습니다. 지금까지 이 대화에서 한 일이
+    전부 개발자용 작업이었으니까요. 실제로는 개발과 상관없는 일이 훨씬 많습니다.
+    이 문서는 그걸 개발 용어 없이 정리한 것입니다.
+  </p>
+</header>
+
+<section>
+  <h2>한 줄로 말하면</h2>
+  <p class="sub">챗봇이 아니라, 손이 달린 조수입니다.</p>
+  <p>
+    보통의 AI 채팅은 <strong>답변을 글로 써 줍니다</strong>. 저는 그 대신
+    <strong>이 맥북에서 직접 작업을 합니다</strong>. 폴더를 열고, 파일을 만들고, 고치고,
+    프로그램을 실행하고, 결과를 확인하고, 잘못됐으면 다시 합니다.
+  </p>
+  <p>
+    사람으로 치면 "이거 어떻게 하는지 알려줘"가 아니라
+    <strong>"이거 좀 해 놔"</strong>라고 시킬 수 있는 쪽입니다.
+  </p>
+</section>
+
+<section>
+  <h2>오늘 실제로 한 일</h2>
+  <p class="sub">비유로 바꿔 보면 이런 일이었습니다.</p>
+  <p>
+    오늘 이 대화에서 저는 이 프로젝트에 <strong>자동 검사원</strong>을 한 명 고용해 붙였습니다.
+    전에는 사람이 직접 기억해서 검사를 돌려야 했고, 깜빡하면 잘못된 상태가 그냥 통과했습니다.
+    실제로 그렇게 새어 나간 문제를 하나 발견해서 고쳤고, 이제는 누가 무엇을 고치든
+    자동으로 검사가 돌아가서 문제가 있으면 즉시 걸립니다.
+  </p>
+  <p>
+    중요한 건 <strong>제가 "다 됐습니다"라고 말하기 전에 실제로 돌려보고 통과하는 걸 확인했다</strong>는
+    점입니다. 검사를 처음 붙였을 때는 오히려 실패했고, 원인을 찾아 고친 뒤 다시 돌려서
+    통과하는 걸 보고 나서야 완료라고 말씀드렸습니다.
+  </p>
+</section>
+
+<section>
+  <h2>개발과 상관없이 시킬 수 있는 일</h2>
+  <p class="sub">이 컴퓨터에 이미 연결돼 있는 것들입니다.</p>
+
+  <div class="grid">
+    <div class="item">
+      <h4>파일과 폴더 정리</h4>
+      <p>수백 개 파일 이름을 규칙대로 바꾸기, 중복 찾아내기, 날짜별로 분류하기, 흩어진 자료를 한 폴더로 모으기.</p>
+    </div>
+    <div class="item">
+      <h4>문서 만들기</h4>
+      <p>보고서, 제안서, 회의록, 발표자료 초안. 표와 그래프가 들어간 문서, 한글(HWPX)이나 워드 파일로도.</p>
+    </div>
+    <div class="item">
+      <h4>자료 조사</h4>
+      <p>인터넷에서 찾아 읽고, 여러 출처를 비교해서 요약. 출처를 같이 드리니 직접 확인하실 수 있습니다.</p>
+    </div>
+    <div class="item">
+      <h4>노션 · 구글 드라이브</h4>
+      <p>페이지 만들고 정리하기, 문서 찾아 읽고 요약하기, 내용을 옮겨 담기.</p>
+    </div>
+    <div class="item">
+      <h4>메일과 일정</h4>
+      <p>아웃룩 메일 검색·정리, 초안 작성, 일정 잡기와 빈 시간 찾기. (보내기 전에는 항상 먼저 보여드립니다.)</p>
+    </div>
+    <div class="item">
+      <h4>옵시디언 메모</h4>
+      <p>쓰시는 메모장(제피란더스)을 읽고, 찾고, 새 메모를 써 넣기.</p>
+    </div>
+    <div class="item">
+      <h4>웹사이트 대신 조작</h4>
+      <p>브라우저를 직접 움직여서 반복 클릭 작업, 화면 캡처, 자료 수집.</p>
+    </div>
+    <div class="item">
+      <h4>맥 앱 조작</h4>
+      <p>화면에 떠 있는 앱을 읽고 버튼을 누르는 것까지 가능합니다.</p>
+    </div>
+    <div class="item">
+      <h4>정해진 시각에 자동 실행</h4>
+      <p>"매일 아침 8시에 어제 자료 정리해서 요약해 줘" 같은 반복 예약.</p>
+    </div>
+    <div class="item">
+      <h4>기억해 두기</h4>
+      <p>제 취향, 자주 쓰는 규칙, 지난 결정과 그 이유를 저장해 두고 다음에 알아서 반영.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>바로 복사해서 써 보실 문장</h2>
+  <p class="sub">그대로 붙여넣으셔도 됩니다.</p>
+
+  <div class="say">다운로드 폴더 좀 정리해 줘. 뭐가 있는지 먼저 보여주고, 어떻게 나눌지 제안해 줘.</div>
+  <div class="say">이 PDF 읽고 A4 한 장으로 요약해 줘. 숫자는 원문 그대로 인용하고 쪽수도 같이 적어 줘.</div>
+  <div class="say">지난주 받은 메일 중에 내가 답장 안 한 것만 찾아서 목록으로 만들어 줘.</div>
+  <div class="say">이 주제로 자료 조사해서 노션에 페이지 하나 만들어 줘. 출처 링크 꼭 달고.</div>
+  <div class="say">매일 아침 9시에 오늘 일정이랑 어제 안 끝난 일 정리해서 옵시디언에 써 줘.</div>
+</section>
+
+<section>
+  <h2>잘 시키는 법</h2>
+  <p class="sub">딱 두 가지만 붙이면 결과가 크게 달라집니다.</p>
+
+  <p><strong>① 결과물의 모양을 말해 주세요.</strong> 글인지 표인지, 몇 장인지, 어디에 저장할지.</p>
+  <p><strong>② 무엇이 되면 성공인지 말해 주세요.</strong> 제가 스스로 확인할 기준이 생깁니다.</p>
+
+  <div class="compare">
+    <div class="bad">
+      <b>아쉬운 지시</b>
+      자료 좀 정리해 줘
+    </div>
+    <div class="good">
+      <b>좋은 지시</b>
+      이 폴더 자료를 월별로 나눠서 표 하나로 만들어 줘. 빠진 달이 있으면 표시해 줘.
+    </div>
+  </div>
+
+  <p style="margin-top:18px">
+    잘 모르겠으면 <strong>"어떻게 시키면 좋을지 너가 다듬어 줘"</strong>라고 하셔도 됩니다.
+    제가 질문을 정리해서 되물어 드립니다.
+  </p>
+  <p>
+    그리고 <strong>중간에 말을 끊고 방향을 바꾸셔도 됩니다.</strong>
+    "아니 그거 말고"라고 하시면 됩니다. 처음부터 완벽하게 설명하실 필요 없습니다.
+  </p>
+</section>
+
+<section>
+  <h2>제가 지키는 원칙</h2>
+  <p class="sub">신뢰할 수 있어야 시킬 수 있으니까요.</p>
+  <table>
+    <tr>
+      <td>확인 먼저</td>
+      <td>메일 발송, 외부 공개, 지우기처럼 <strong>되돌리기 어려운 일은 하기 전에 여쭙습니다.</strong>
+          오늘도 브랜치를 지우기 전에 먼저 여쭤봤고, 지울 때는 복구용 번호를 남겨 뒀습니다.</td>
+    </tr>
+    <tr>
+      <td>증거 있는 완료</td>
+      <td>실제로 돌려보고 결과를 본 뒤에만 "됐습니다"라고 말합니다.
+          안 해 본 건 <strong>"이건 확인 못 했습니다"</strong>라고 그대로 말씀드립니다.</td>
+    </tr>
+    <tr>
+      <td>실패도 그대로</td>
+      <td>안 되면 안 됐다고 말하고 실제 오류 내용을 보여드립니다. 얼버무리지 않습니다.</td>
+    </tr>
+  </table>
+</section>
+
+<section>
+  <h2>못 하는 것, 조심하는 것</h2>
+  <p class="sub">과장하지 않고 말씀드립니다.</p>
+  <ul>
+    <li><strong>비밀번호를 대신 입력하는 로그인</strong>은 제가 못 합니다. 그때는 직접 해 주십사 부탁드립니다.</li>
+    <li><strong>돈이 나가는 일, 남에게 나가는 연락</strong>은 반드시 먼저 보여드리고 허락을 받습니다.</li>
+    <li><strong>제가 틀릴 수 있습니다.</strong> 그래서 중요한 건 근거와 출처를 같이 드립니다. 확인해 주세요.</li>
+    <li><strong>대화를 새로 시작하면 앞의 맥락은 잊습니다.</strong> 계속 기억해야 할 건 "이건 기억해 둬"라고 말씀해 주시면 저장해 둡니다.</li>
+  </ul>
+</section>
+
+<section>
+  <h2>그래서 지금 무엇부터</h2>
+  <p>
+    제일 좋은 첫 시도는 <strong>손으로 하기 귀찮고 반복되는 일</strong>입니다.
+    매주 하는 정리, 매번 똑같이 쓰는 문서, 여기저기서 모아야 하는 자료 같은 것.
+  </p>
+  <p class="note">
+    이렇게 시작해 보세요 —
+    <strong>"내가 매주 반복해서 하는 일 중에 너한테 맡길 만한 게 뭐가 있을지 같이 찾아보자."</strong>
+    제가 질문을 몇 개 드리면서 정리해 드리겠습니다.
+  </p>
+</section>
+
+<footer>
+  2026년 8월 8일 작성 · 이 문서는 그냥 파일 하나라 지우셔도 아무 문제 없습니다.
+</footer>
+
+</div>
+</body>
+</html>
