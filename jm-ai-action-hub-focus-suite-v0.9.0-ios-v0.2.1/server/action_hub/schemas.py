@@ -5,6 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .focus_schemas import FocusDashboardSummary
 from .models import ActionType, Destination, ExecutorType, ItemState, PlanStatus
 
 
@@ -654,7 +655,7 @@ class MobileDashboard(BaseModel):
     brief: DailyBrief
     decision: DecisionPlan
     recent_activity: list[MobileActivityItem]
-    focus_summary: dict[str, Any] = Field(default_factory=dict)
+    focus_summary: FocusDashboardSummary | None = None
 
 
 class MobileChangeItem(BaseModel):

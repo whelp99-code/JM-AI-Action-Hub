@@ -239,6 +239,62 @@ def test_dual_big3_capacity_persists_and_releases_previous_attention(client: Tes
         assert plan_row.available_minutes == 90
 
 
+def test_dual_big3_recommends_by_capacity_intensity_and_priority(client: TestClient) -> None:
+    plan = _plan(client, "전략 설계 90분\n긴급 회신 20분\nAI 자동화 30분\n보류 자료 읽기")
+    strategy, reply, ai_task, deferred = [item["id"] for item in plan["items"]]
+    with client.app.state.database.session_factory() as db:
+        rows = {row.id: row for row in db.scalars(select(ActionItem).where(ActionItem.id.in_(plan["items"][i]["id"] for i in range(4))))}
+        rows[strategy].estimated_minutes = 90
+        rows[strategy].energy_level = "high"
+        rows[strategy].executor = "human"
+        rows[reply].estimated_minutes = 20
+        rows[reply].energy_level = "low"
+        rows[reply].executor = "human"
+        rows[ai_task].estimated_minutes = 30
+        rows[ai_task].executor = "ai"
+        rows[deferred].estimated_minutes = 15
+        for item_id, importance, urgency, quadrant in (
+            (strategy, 95, 70, "q1"),
+            (reply, 75, 95, "q1"),
+            (ai_task, 80, 80, "q2"),
+            (deferred, 90, 10, "q4"),
+        ):
+            rows[item_id].attention_state = AttentionState.CLASSIFIED.value
+            rows[item_id].priority_assessment = PriorityAssessment(
+                action_item_id=item_id,
+                importance_score=importance,
+                urgency_score=urgency,
+                quadrant=quadrant,
+                source="user",
+                confidence=1.0,
+                reasons_json=["테스트 평가"],
+                user_overridden=True,
+            )
+        db.commit()
+
+    response = client.post(
+        "/api/v1/focus/commitments",
+        json={"human_item_ids": [], "ai_item_ids": [], "available_minutes": 45},
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["human_remaining_minutes"] == 45
+    assert body["ai_remaining_minutes"] == 45
+    assert body["human_recommendations"][0]["action"]["action_item_id"] == reply
+    assert body["human_recommendations"][0]["processing_intensity"] == "light"
+    assert body["human_recommendations"][0]["schedule_fit"] == "fits"
+    assert body["human_recommendations"][0]["action"]["assessment"]["importance_score"] == 75
+    assert any("남은 일정 45분" in reason for reason in body["human_recommendations"][0]["reasons"])
+    assert body["ai_recommendations"][0]["action"]["action_item_id"] == ai_task
+
+    accepted = client.post(
+        "/api/v1/focus/commitments",
+        json={"human_item_ids": [reply], "ai_item_ids": [], "available_minutes": 45},
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert all(item["action"]["action_item_id"] != reply for item in accepted.json()["human_recommendations"])
+
+
 def test_microstep_generation_update_and_replace_policy(client: TestClient) -> None:
     plan = _plan(client, "API 인증 오류 수정 repo:owner/repo")
     item_id = plan["items"][0]["id"]

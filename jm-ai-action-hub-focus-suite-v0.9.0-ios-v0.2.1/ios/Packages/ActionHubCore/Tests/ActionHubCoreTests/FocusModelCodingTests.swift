@@ -42,6 +42,38 @@ final class FocusModelCodingTests: XCTestCase {
     XCTAssertEqual(updateJSON["mark_action_completed"] as? Bool, true)
   }
 
+  func testBig3RecommendationsDecodeWithCapacityAndRationale() throws {
+    let response = try ActionHubJSON.decoder().decode(
+      DualBig3Response.self,
+      from: Data(
+        #"""
+        {
+          "date":"2026-08-09","available_minutes":45,
+          "human_committed_minutes":0,"ai_committed_minutes":0,"overload_minutes":0,
+          "human":[],"ai":[],"warnings":[],
+          "human_remaining_minutes":45,"ai_remaining_minutes":45,
+          "human_recommendations":[{
+            "action":{
+              "action_item_id":"item-1","plan_id":"plan-1","title":"긴급 회신",
+              "description":"","project":null,"repository":null,"priority":2,
+              "estimated_minutes":20,"actual_minutes":null,"executor":"human",
+              "preferred_worker":null,"state":"draft","attention_state":"classified",
+              "due_at":null,"deadline_at":null,"external_url":null,"energy_level":"low",
+              "assessment":null
+            },
+            "owner_type":"human","rank":1,"score":99.4,
+            "processing_intensity":"light","schedule_fit":"fits",
+            "remaining_minutes":25,"reasons":["중요도 75 · 긴급도 95","남은 일정 45분에 맞음"]
+          }]
+        }
+        """#.utf8)
+    )
+    XCTAssertEqual(response.humanRecommendations.count, 1)
+    XCTAssertEqual(response.humanRecommendations.first?.action.title, "긴급 회신")
+    XCTAssertEqual(response.humanRecommendations.first?.processingIntensity, "light")
+    XCTAssertEqual(response.humanRecommendations.first?.remainingMinutes, 25)
+  }
+
   func testWidgetSnapshotRemainsBackwardCompatibleWithVersionOneCache() throws {
     let old =
       #"{"generated_at":"2026-07-31T01:00:00Z","review_count":2,"waiting_count":1,"ai_running_count":0,"failed_count":0,"overload_minutes":30,"top_titles":["기존 업무"]}"#

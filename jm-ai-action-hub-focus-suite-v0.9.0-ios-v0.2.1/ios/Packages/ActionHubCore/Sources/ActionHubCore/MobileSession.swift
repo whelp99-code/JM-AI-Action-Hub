@@ -167,6 +167,15 @@ public actor MobileSession {
     }
   }
 
+  public func resolveFollowup(
+    id: String,
+    request: FollowUpResolveRequest
+  ) async throws -> FollowUp {
+    try await perform { client, token in
+      try await client.resolveFollowup(id: id, request: request, accessToken: token)
+    }
+  }
+
   public func changes(cursor: String? = nil, limit: Int? = nil) async throws -> ChangesResponse {
     try await perform { client, token in
       try await client.changes(accessToken: token, cursor: cursor, limit: limit)

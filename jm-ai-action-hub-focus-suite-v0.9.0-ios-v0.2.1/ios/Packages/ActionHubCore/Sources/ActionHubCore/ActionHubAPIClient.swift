@@ -56,6 +56,19 @@ public struct ActionHubAPIClient: Sendable {
       accessToken: accessToken)
   }
 
+  public func resolveFollowup(
+    id: String,
+    request: FollowUpResolveRequest,
+    accessToken: String
+  ) async throws -> FollowUp {
+    try await send(
+      method: "POST",
+      path: "/api/v1/mobile/followups/\(pathComponent(id))/resolve",
+      body: request,
+      accessToken: accessToken
+    )
+  }
+
   public func changes(accessToken: String, cursor: String? = nil, limit: Int? = nil) async throws
     -> ChangesResponse
   {

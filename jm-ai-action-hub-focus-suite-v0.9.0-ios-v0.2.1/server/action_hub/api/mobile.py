@@ -8,6 +8,8 @@ from ..models import MobileDevice, PushNotification
 from ..schemas import (
     ActionItemUpdate,
     ExecutionSummary,
+    FollowUpRead,
+    FollowUpResolveRequest,
     MobileActionItemUpdate,
     MobileActivityItem,
     MobileApprovalRequest,
@@ -32,6 +34,7 @@ from ..schemas import (
 )
 from ..security import require_api_key, require_mobile_scope
 from ..services.executor import approve_plan, build_execution_summary, execute_plan, reject_items, update_item
+from ..services.followups import resolve_followup
 from ..services.mobile import (
     build_mobile_dashboard,
     capabilities,
@@ -245,6 +248,33 @@ def get_mobile_activity(
     db: Session = Depends(get_db),
 ) -> list[MobileActivityItem]:
     return recent_activity(db, limit)
+
+
+@mobile_router.post(
+    "/followups/{followup_id}/resolve",
+    response_model=FollowUpRead,
+    operation_id="resolveMobileFollowup",
+)
+def resolve_mobile_followup(
+    followup_id: str,
+    payload: FollowUpResolveRequest,
+    request: Request,
+    principal: MobilePrincipal = Depends(require_mobile_scope("plans:edit")),
+    db: Session = Depends(get_db),
+) -> FollowUpRead:
+    try:
+        return resolve_followup(
+            db,
+            followup_id=followup_id,
+            state=payload.state,
+            settings=request.app.state.settings,
+            actor=f"mobile:{principal.device_id}",
+            note=payload.note,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @mobile_router.post(

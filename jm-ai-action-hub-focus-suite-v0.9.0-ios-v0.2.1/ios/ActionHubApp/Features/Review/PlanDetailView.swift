@@ -9,6 +9,7 @@ private struct BlockedApproval: Identifiable {
   let itemIds: [String]
   let items: [(title: String, reason: String)]
   let alsoExecute: Bool
+  let executeItemIds: [String]?
 }
 
 struct PlanDetailView: View {
@@ -32,6 +33,12 @@ struct PlanDetailView: View {
 
   private var hasActionableItems: Bool {
     plan?.items.contains { !Self.terminalItemStates.contains($0.state) } ?? false
+  }
+
+  private var aiDelegationItems: [ActionItem] {
+    plan?.items.filter {
+      $0.executor == .ai && !Self.terminalItemStates.contains($0.state)
+    } ?? []
   }
 
   /// A capture the parser found no action in. It still reaches this screen so the share
@@ -94,6 +101,15 @@ struct PlanDetailView: View {
               Label("승인 후 등록·실행", systemImage: "paperplane.fill")
             }
             .disabled(isWorking || !hasActionableItems)
+
+            if !aiDelegationItems.isEmpty {
+              Button {
+                Task { await delegateToAI(plan) }
+              } label: {
+                Label("AI 위임 \(aiDelegationItems.count)건", systemImage: "sparkles")
+              }
+              .disabled(isWorking)
+            }
 
             Button(role: .destructive) {
               showRejectConfirmation = true
@@ -207,6 +223,26 @@ struct PlanDetailView: View {
     }
   }
 
+  private func delegateToAI(_ current: ActionPlan) async {
+    let itemIds = aiDelegationItems.map(\.id)
+    guard !itemIds.isEmpty else { return }
+    isWorking = true
+    defer { isWorking = false }
+    do {
+      let approved = try await model.approve(plan: current, itemIds: itemIds)
+      plan = approved
+      guard approved.blockedItemIds.isEmpty else {
+        presentBlocked(approved, alsoExecute: true, executeItemIds: itemIds)
+        return
+      }
+      try await runExecute(approved, itemIds: itemIds)
+      dismiss()
+    } catch {
+      model.handle(error)
+      await load()
+    }
+  }
+
   /// Explicit-force retry after the user has seen why the server blocked the items -- only the
   /// still-blocked items are re-sent with `forceReviewItems: true`, leaving anything already
   /// approved untouched.
@@ -219,7 +255,7 @@ struct PlanDetailView: View {
         plan: current, itemIds: info.itemIds, forceReviewItems: true)
       plan = updated
       if info.alsoExecute {
-        try await runExecute(updated)
+        try await runExecute(updated, itemIds: info.executeItemIds)
         dismiss()
       } else {
         confirmationMessage = "강제 승인했습니다."
@@ -234,8 +270,8 @@ struct PlanDetailView: View {
   /// retry loop still working through a transient failure). A silent success here previously
   /// read as "execution worked" when it might not have -- surface it via the app-wide error
   /// channel since this view is about to dismiss.
-  private func runExecute(_ approved: ActionPlan) async throws {
-    let summary = try await model.execute(plan: approved)
+  private func runExecute(_ approved: ActionPlan, itemIds: [String]? = nil) async throws {
+    let summary = try await model.execute(plan: approved, itemIds: itemIds)
     guard summary.retrying > 0 || !summary.errors.isEmpty else { return }
     var message = "실행 요청을 보냈지만 일부 항목이 아직 실패 상태입니다"
     if summary.retrying > 0 { message += " (재시도 중 \(summary.retrying)건)" }
@@ -245,12 +281,20 @@ struct PlanDetailView: View {
     model.lastError = message
   }
 
-  private func presentBlocked(_ updated: ActionPlan, alsoExecute: Bool) {
+  private func presentBlocked(
+    _ updated: ActionPlan,
+    alsoExecute: Bool,
+    executeItemIds: [String]? = nil
+  ) {
     let items = updated.items
       .filter { updated.blockedItemIds.contains($0.id) }
       .map { (title: $0.title, reason: $0.reviewReason ?? "검토 필요") }
     blockedApproval = BlockedApproval(
-      itemIds: updated.blockedItemIds, items: items, alsoExecute: alsoExecute)
+      itemIds: updated.blockedItemIds,
+      items: items,
+      alsoExecute: alsoExecute,
+      executeItemIds: executeItemIds
+    )
   }
 }
 

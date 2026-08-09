@@ -64,6 +64,7 @@ public struct FocusActionSummary: Codable, Sendable, Equatable, Identifiable {
   public let deadlineAt: Date?
   public let externalUrl: String?
   public let assessment: PriorityAssessment?
+  public let energyLevel: String?
 }
 
 public struct TriageResponse: Codable, Sendable, Equatable {
@@ -129,6 +130,18 @@ public struct DailyCommitment: Codable, Sendable, Equatable, Identifiable {
   public let action: FocusActionSummary?
 }
 
+public struct Big3Recommendation: Codable, Sendable, Equatable, Identifiable {
+  public var id: String { "\(ownerType)-\(action.id)" }
+  public let action: FocusActionSummary
+  public let ownerType: String
+  public let rank: Int
+  public let score: Double
+  public let processingIntensity: String
+  public let scheduleFit: String
+  public let remainingMinutes: Int
+  public let reasons: [String]
+}
+
 public struct DualBig3Request: Codable, Sendable, Equatable {
   public let targetDate: String?
   public let humanItemIds: [String]
@@ -160,6 +173,45 @@ public struct DualBig3Response: Codable, Sendable, Equatable {
   public let human: [DailyCommitment]
   public let ai: [DailyCommitment]
   public let warnings: [String]
+  public let humanRemainingMinutes: Int
+  public let aiRemainingMinutes: Int
+  public let humanRecommendations: [Big3Recommendation]
+  public let aiRecommendations: [Big3Recommendation]
+
+  private enum CodingKeys: String, CodingKey {
+    case date
+    case availableMinutes
+    case humanCommittedMinutes
+    case aiCommittedMinutes
+    case overloadMinutes
+    case human
+    case ai
+    case warnings
+    case humanRemainingMinutes
+    case aiRemainingMinutes
+    case humanRecommendations
+    case aiRecommendations
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    date = try container.decode(String.self, forKey: .date)
+    availableMinutes = try container.decode(Int.self, forKey: .availableMinutes)
+    humanCommittedMinutes = try container.decode(Int.self, forKey: .humanCommittedMinutes)
+    aiCommittedMinutes = try container.decode(Int.self, forKey: .aiCommittedMinutes)
+    overloadMinutes = try container.decode(Int.self, forKey: .overloadMinutes)
+    human = try container.decode([DailyCommitment].self, forKey: .human)
+    ai = try container.decode([DailyCommitment].self, forKey: .ai)
+    warnings = try container.decode([String].self, forKey: .warnings)
+    humanRemainingMinutes = try container.decodeIfPresent(Int.self, forKey: .humanRemainingMinutes)
+      ?? max(0, availableMinutes - humanCommittedMinutes)
+    aiRemainingMinutes = try container.decodeIfPresent(Int.self, forKey: .aiRemainingMinutes)
+      ?? max(0, availableMinutes - aiCommittedMinutes)
+    humanRecommendations = try container.decodeIfPresent(
+      [Big3Recommendation].self, forKey: .humanRecommendations) ?? []
+    aiRecommendations = try container.decodeIfPresent(
+      [Big3Recommendation].self, forKey: .aiRecommendations) ?? []
+  }
 }
 
 public struct MicroStepInput: Codable, Sendable, Equatable {
@@ -396,4 +448,29 @@ public struct FocusDashboardSummary: Codable, Sendable, Equatable {
   public let aiBig3: [DailyCommitment]
   public let activeFocus: FocusSession?
   public let untriagedCount: Int
+  public let humanBig3Recommendations: [Big3Recommendation]
+  public let aiBig3Recommendations: [Big3Recommendation]
+
+  private enum CodingKeys: String, CodingKey {
+    case matrixCounts
+    case humanBig3
+    case aiBig3
+    case activeFocus
+    case untriagedCount
+    case humanBig3Recommendations
+    case aiBig3Recommendations
+  }
+
+  public init(from decoder: Decoder) throws {
+    let container = try decoder.container(keyedBy: CodingKeys.self)
+    matrixCounts = try container.decode([String: Int].self, forKey: .matrixCounts)
+    humanBig3 = try container.decode([DailyCommitment].self, forKey: .humanBig3)
+    aiBig3 = try container.decode([DailyCommitment].self, forKey: .aiBig3)
+    activeFocus = try container.decodeIfPresent(FocusSession.self, forKey: .activeFocus)
+    untriagedCount = try container.decodeIfPresent(Int.self, forKey: .untriagedCount) ?? 0
+    humanBig3Recommendations = try container.decodeIfPresent(
+      [Big3Recommendation].self, forKey: .humanBig3Recommendations) ?? []
+    aiBig3Recommendations = try container.decodeIfPresent(
+      [Big3Recommendation].self, forKey: .aiBig3Recommendations) ?? []
+  }
 }

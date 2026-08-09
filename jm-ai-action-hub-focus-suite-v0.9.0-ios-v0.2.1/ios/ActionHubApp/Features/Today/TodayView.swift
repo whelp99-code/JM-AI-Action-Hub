@@ -3,12 +3,15 @@ import SwiftUI
 
 struct TodayView: View {
   @EnvironmentObject private var model: AppModel
+  @State private var isStartingFocus = false
+  @State private var resolvingFollowupID: String?
 
   var body: some View {
     ScrollView {
       if let dashboard = model.dashboard {
         LazyVStack(alignment: .leading, spacing: 18) {
           summaryGrid(dashboard)
+          nextAction(dashboard)
           focusStatus(dashboard)
           topItems(dashboard)
           risks(dashboard)
@@ -35,6 +38,101 @@ struct TodayView: View {
           Image(systemName: "arrow.clockwise")
         }
       }
+    }
+  }
+
+  @ViewBuilder
+  private func nextAction(_ dashboard: MobileDashboard) -> some View {
+    SectionCard(title: "다음 행동", systemImage: "arrow.right.circle.fill") {
+      if let active = model.activeFocus ?? dashboard.focusSummary?.activeFocus {
+        VStack(alignment: .leading, spacing: 8) {
+          Text("집중 세션이 진행 중입니다.").font(.headline)
+          Text(active.action?.title ?? "집중 중인 업무")
+            .font(.subheadline)
+            .lineLimit(2)
+            .privacySensitive()
+          Button("집중 화면 열기") {
+            model.selectedTab = .focus
+            model.focusRequestedSection = "focus"
+          }
+          .buttonStyle(.borderedProminent)
+        }
+      } else if dashboard.reviewCount > 0 {
+        VStack(alignment: .leading, spacing: 8) {
+          Text("수집한 업무 \(dashboard.reviewCount)건을 먼저 결정하세요.")
+            .font(.headline)
+          Text("승인하면 Todoist·GitHub·Calendar 등록 또는 AI 실행으로 이어집니다.")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+          Button("검토 큐 열기") { model.selectedTab = .review }
+            .buttonStyle(.borderedProminent)
+        }
+      } else if let untriaged = dashboard.focusSummary?.untriagedCount, untriaged > 0 {
+        VStack(alignment: .leading, spacing: 8) {
+          Text("분류할 업무 \(untriaged)건이 있습니다.").font(.headline)
+          Text("실행·계획·위임·보류를 결정하면 오늘 계획이 정리됩니다.")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+          Button("분류 시작") {
+            model.selectedTab = .focus
+            model.focusRequestedSection = "triage"
+          }
+          .buttonStyle(.borderedProminent)
+        }
+      } else if let item = dashboard.decision.topItems.first {
+        VStack(alignment: .leading, spacing: 10) {
+          Text("지금 시작할 업무").font(.caption.bold()).foregroundStyle(.secondary)
+          Text(item.title)
+            .font(.title3.bold())
+            .lineLimit(3)
+            .privacySensitive()
+          HStack(spacing: 12) {
+            Label(minutes(item.estimatedMinutes), systemImage: "clock")
+            Label(item.executor.rawValue, systemImage: "person.crop.circle")
+          }
+          .font(.caption)
+          .foregroundStyle(.secondary)
+          Button {
+            Task { await startFocus(item) }
+          } label: {
+            Label("25분 집중 시작", systemImage: "play.fill")
+          }
+          .buttonStyle(.borderedProminent)
+          .disabled(isStartingFocus)
+        }
+      } else if !dashboard.decision.waitingFollowups.isEmpty {
+        VStack(alignment: .leading, spacing: 8) {
+          Text("응답 대기 \(dashboard.decision.waitingFollowups.count)건을 확인하세요.")
+            .font(.headline)
+          Text("후속 연락과 외부 상태를 활동 피드에서 확인할 수 있습니다.")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+          Button("활동 피드 열기") { model.selectedTab = .activity }
+            .buttonStyle(.borderedProminent)
+        }
+      } else {
+        VStack(alignment: .leading, spacing: 8) {
+          Text("오늘의 다음 행동을 만들어 보세요.").font(.headline)
+          Text("업무를 입력하면 검토·계획·집중까지 이어집니다.")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+          Button("빠른 입력") { model.isCapturePresented = true }
+            .buttonStyle(.borderedProminent)
+        }
+      }
+    }
+  }
+
+  private func startFocus(_ item: DecisionItem) async {
+    guard !isStartingFocus else { return }
+    isStartingFocus = true
+    defer { isStartingFocus = false }
+    do {
+      _ = try await model.startFocus(on: item)
+      model.selectedTab = .focus
+      model.focusRequestedSection = "focus"
+    } catch {
+      model.lastError = error.localizedDescription
     }
   }
 
@@ -108,6 +206,42 @@ struct TodayView: View {
               }
             }
           }
+        } else if !focus.humanBig3Recommendations.isEmpty
+          || !focus.aiBig3Recommendations.isEmpty
+        {
+          Divider()
+          VStack(alignment: .leading, spacing: 8) {
+            Text("오늘의 Big3 제안").font(.caption.bold()).foregroundStyle(.secondary)
+            ForEach(focus.humanBig3Recommendations.prefix(3)) { recommendation in
+              HStack {
+                Text("내 · \(recommendation.action.title)")
+                  .font(.subheadline)
+                  .lineLimit(1)
+                  .privacySensitive()
+                Spacer()
+                Text(minutes(recommendation.action.estimatedMinutes))
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
+            }
+            ForEach(focus.aiBig3Recommendations.prefix(3)) { recommendation in
+              HStack {
+                Text("AI · \(recommendation.action.title)")
+                  .font(.subheadline)
+                  .lineLimit(1)
+                  .privacySensitive()
+                Spacer()
+                Text(minutes(recommendation.action.estimatedMinutes))
+                  .font(.caption)
+                  .foregroundStyle(.secondary)
+              }
+            }
+            Button("Big3 제안 검토") {
+              model.selectedTab = .focus
+              model.focusRequestedSection = "big3"
+            }
+            .buttonStyle(.bordered)
+          }
         }
       }
     }
@@ -180,9 +314,34 @@ struct TodayView: View {
               "\(followup.waitingFor) · \(followup.followUpAt.formatted(date: .abbreviated, time: .shortened))"
             )
             .font(.caption).foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+              Button("후속 연락") {
+                Task { await resolveFollowup(followup, state: "followed_up") }
+              }
+              .buttonStyle(.bordered)
+              Button("응답 받음") {
+                Task { await resolveFollowup(followup, state: "response_received") }
+              }
+              .buttonStyle(.borderedProminent)
+            }
+            .disabled(resolvingFollowupID != nil)
+          }
+          if followup.id != dashboard.decision.waitingFollowups.last?.id {
+            Divider()
           }
         }
       }
+    }
+  }
+
+  private func resolveFollowup(_ followup: FollowUp, state: String) async {
+    guard resolvingFollowupID == nil else { return }
+    resolvingFollowupID = followup.id
+    defer { resolvingFollowupID = nil }
+    do {
+      _ = try await model.resolveFollowup(followup, state: state)
+    } catch {
+      model.lastError = error.localizedDescription
     }
   }
 

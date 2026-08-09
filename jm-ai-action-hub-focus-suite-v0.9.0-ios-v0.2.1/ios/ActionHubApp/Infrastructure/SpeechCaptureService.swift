@@ -4,6 +4,23 @@ import Foundation
 import Speech
 import UIKit
 
+/// `AVAudioNode.installTap` invokes its block on the audio/realtime queue. Keep the legacy
+/// Speech request behind an explicit Sendable boundary so a closure created from this
+/// `@MainActor` service cannot inherit main-actor isolation and trap when the audio thread calls
+/// it. `SFSpeechAudioBufferRecognitionRequest.append` is specifically designed to receive the
+/// buffers produced by an audio tap; the unchecked boundary documents that ownership contract.
+private final class SpeechAudioBufferRequestBox: @unchecked Sendable {
+  private let request: SFSpeechAudioBufferRecognitionRequest
+
+  init(_ request: SFSpeechAudioBufferRecognitionRequest) {
+    self.request = request
+  }
+
+  func append(_ buffer: AVAudioPCMBuffer) {
+    request.append(buffer)
+  }
+}
+
 @MainActor
 final class SpeechCaptureService: ObservableObject {
   @Published private(set) var isRecording = false
@@ -135,9 +152,11 @@ final class SpeechCaptureService: ObservableObject {
 
       let input = audioEngine.inputNode
       let format = input.outputFormat(forBus: 0)
-      input.installTap(onBus: 0, bufferSize: 1_024, format: format) { buffer, _ in
-        request.append(buffer)
+      let requestBox = SpeechAudioBufferRequestBox(request)
+      let tapHandler: @Sendable (AVAudioPCMBuffer, AVAudioTime) -> Void = { [requestBox] buffer, _ in
+        requestBox.append(buffer)
       }
+      input.installTap(onBus: 0, bufferSize: 1_024, format: format, block: tapHandler)
       tapInstalled = true
       audioEngine.prepare()
       try audioEngine.start()
