@@ -91,6 +91,37 @@ def _event_is_context_for_task(fragment: str) -> bool:
     return any(re.search(pattern, fragment, flags=re.IGNORECASE) for pattern in EVENT_CONTEXT_TASK_PATTERNS)
 
 
+_LIST_MARKER = re.compile(r"(?:^|(?<=\s)|(?<=:)|(?<=：))\s*\d{1,2}[.)]\s+")
+_LIST_TRAILER = re.compile(r"\s*(?:둘\s*다|모두)\s*할\s*일\s*$")
+_META_TITLE = re.compile(
+    r"^(?:할\s*일|둘\s*다\s*할\s*일|모두\s*할\s*일|할\s*일\s*(?:두|세|네|\d+)\s*건)\s*[:：]?$"
+)
+_EMPTY_DATE_SHELL = re.compile(
+    r"(?:[월화수목금토일]\s*)?\(\s*(?:due\s*:|마감\s*:|kst|까지|[,/.\s])*\)",
+    flags=re.IGNORECASE,
+)
+_LEFTOVER_DUE_LABEL = re.compile(r"(?:\(\s*)?(?:due|마감)\s*:\s*(?:\)|(?=\s|$))", flags=re.IGNORECASE)
+
+
+def _split_numbered_items(value: str) -> list[str]:
+    """Split ``1) A 2) B`` without treating a list header or trailer as an item."""
+
+    peeled = _LIST_TRAILER.sub("", value).strip()
+    parts = _LIST_MARKER.split(peeled)
+    if len(parts) == 1:
+        return [value]
+    return [part.strip(" ,:：") for part in parts if part.strip(" ,:：")]
+
+
+def _is_meta_title(title: str) -> bool:
+    normalized = re.sub(r"\s+", " ", title).strip(" ,.:：;；-()[]")
+    if not normalized:
+        return True
+    if _META_TITLE.fullmatch(normalized):
+        return True
+    return bool(re.fullmatch(r"[\W_]+", normalized))
+
+
 def split_fragments(text: str) -> list[str]:
     normalized = normalize_text(text)
     normalized = re.sub(r"(?:^|\n)\s*[-*•·☐☑✅]\s*", "\n", normalized)
@@ -102,23 +133,28 @@ def split_fragments(text: str) -> list[str]:
             continue
         parts = re.split(r"\s*(?:그리고|또한|그다음|그 후)\s*", chunk)
         for part in parts:
-            for clause in _split_comma_clauses(part):
-                clause = clause.strip(" ,，")
-                if clause:
-                    fragments.append(clause)
+            for numbered in _split_numbered_items(part):
+                for clause in _split_comma_clauses(numbered):
+                    clause = clause.strip(" ,，")
+                    if clause and not _is_meta_title(clause):
+                        fragments.append(clause)
     return fragments[:100]
 
 
-def _clean_title(fragment: str, matched: list[str] | None) -> str:
+def _clean_title(fragment: str, matched: list[str] | None, *, parsed: bool) -> str:
     title = fragment
-    for token in sorted(matched or [], key=len, reverse=True):
-        title = title.replace(token, " ")
-    title = re.sub(r"(?:(?:오늘|내일|모레|이번\s*주|다음\s*주)\s*)", " ", title)
-    title = re.sub(r"(?:오전|오후|아침|점심|저녁|밤)\s*", " ", title)
-    title = re.sub(
-        r"\b(?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
-        " ", title, flags=re.IGNORECASE,
-    )
+    if parsed:
+        for token in sorted(matched or [], key=len, reverse=True):
+            if token.strip():
+                title = title.replace(token, " ")
+        title = re.sub(r"(?:(?:오늘|내일|모레|이번\s*주|다음\s*주)\s*)", " ", title)
+        title = re.sub(r"(?:오전|오후|아침|점심|저녁|밤)\s*", " ", title)
+        title = re.sub(
+            r"\b(?:today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
+            " ", title, flags=re.IGNORECASE,
+        )
+        title = _EMPTY_DATE_SHELL.sub(" ", title)
+        title = _LEFTOVER_DUE_LABEL.sub(" ", title)
     title = re.sub(r"(?:까지|마감(?:으로)?|예정(?:으로)?|해야\s*(?:해|합니다|한다)?|해주세요|해줘|바랍니다)", " ", title)
     title = re.sub(r"(?:repo|저장소)\s*[:=]\s*[\w.-]+/[\w.-]+", " ", title, flags=re.IGNORECASE)
     title = re.sub(r"(?:^|\s)[#@][\w가-힣.-]{2,80}", " ", title)
@@ -128,14 +164,18 @@ def _clean_title(fragment: str, matched: list[str] | None) -> str:
 
 
 def _extract_repo(fragment: str) -> str | None:
-    patterns = [
+    explicit = re.search(
         r"(?:repo|repository|저장소)\s*[:=]\s*([\w.-]+/[\w.-]+)",
-        r"\b([\w.-]+/[\w.-]+)\b",
-    ]
-    for pattern in patterns:
-        match = re.search(pattern, fragment, flags=re.IGNORECASE)
-        if match:
-            return match.group(1)
+        fragment,
+        flags=re.IGNORECASE,
+    )
+    if explicit:
+        return explicit.group(1)
+    for match in re.finditer(r"\b([\w.-]+)/([\w.-]+)\b", fragment):
+        left, right = match.group(1), match.group(2)
+        if left.isdigit() or right.isdigit() or not re.search(r"[A-Za-z]", left + right):
+            continue
+        return f"{left}/{right}"
     return None
 
 
@@ -341,7 +381,10 @@ class RuleBasedActionParser:
                 confidence -= 0.12
             confidence = max(0.1, min(0.98, confidence))
 
-            title = _clean_title(fragment, temporal.matched_text)
+            parsed_due = temporal.at is not None
+            title = _clean_title(fragment, temporal.matched_text, parsed=parsed_due)
+            if _is_meta_title(title):
+                continue
             labels: list[str] = []
             if project:
                 labels.append(project)

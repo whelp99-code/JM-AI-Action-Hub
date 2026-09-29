@@ -92,3 +92,47 @@ def test_duration_is_not_misread_as_clock_time(settings):
     assert item.estimated_minutes == 120
     assert item.is_all_day is True
     assert item.title == "제안서 보내기 deep work"
+
+
+def test_parsed_dates_do_not_leave_empty_shells_in_titles(settings):
+    parser = RuleBasedActionParser(settings)
+    reference = datetime(2026, 8, 30, 12, 0, tzinfo=ZoneInfo("Asia/Seoul"))
+    cases = [
+        ("(9/1) 카톡 진행분 업무 추가", "카톡 진행분 업무 추가", "2026-09-01"),
+        ("내일(9/5 10:00 KST) 작업으로 추가해 줘", "작업으로 추가해 줘", "2026-09-05T10:00:00+09:00"),
+        ("국제약품 질의회신 (due: 9/5)", "국제약품 질의회신", "2026-09-05"),
+        ("KV 메뉴얼 전달 (due: 9/8)", "KV 메뉴얼 전달", "2026-09-08"),
+    ]
+    for text, title, due in cases:
+        item = parser.parse(text, reference, "Asia/Seoul")[0]
+        assert item.title == title, text
+        assert "( )" not in item.title
+        assert "( KST)" not in item.title
+        assert "(due:" not in item.title
+        assert due in item.due_at.isoformat()
+
+
+def test_unparsed_alternate_date_stays_in_title(settings):
+    parser = RuleBasedActionParser(settings)
+    reference = datetime(2026, 8, 30, 12, 0, tzinfo=ZoneInfo("Asia/Seoul"))
+    item = parser.parse("화(9/8) 또는 수(9/9) 후보 검토", reference, "Asia/Seoul")[0]
+    assert "( )" not in item.title
+    assert "9/9" in item.title
+    assert item.due_at.isoformat().startswith("2026-09-08")
+
+
+def test_meta_date_only_line_is_not_a_task(settings):
+    parser = RuleBasedActionParser(settings)
+    reference = datetime(2026, 8, 30, 12, 0, tzinfo=ZoneInfo("Asia/Seoul"))
+    assert parser.parse("(9/8) 할 일", reference, "Asia/Seoul") == []
+    assert parser.parse("둘 다 할 일", reference, "Asia/Seoul") == []
+    assert parser.parse("할 일 두 건:", reference, "Asia/Seoul") == []
+
+
+def test_numbered_list_message_becomes_exactly_two_tasks(settings):
+    parser = RuleBasedActionParser(settings)
+    reference = datetime(2026, 8, 30, 12, 0, tzinfo=ZoneInfo("Asia/Seoul"))
+    items = parser.parse("할 일 두 건: 1) A 2) B 둘 다 할 일", reference, "Asia/Seoul")
+    assert [item.title for item in items] == ["A", "B"]
+    multiline = parser.parse("할 일 두 건:\n1) A\n2) B\n둘 다 할 일", reference, "Asia/Seoul")
+    assert [item.title for item in multiline] == ["A", "B"]
